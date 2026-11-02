@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -24,6 +24,9 @@ class CodeSubmission(BaseModel):
 
 @app.post("/analyze")
 def analyze_code(submission: CodeSubmission):
+    if not submission.code.strip():
+        raise HTTPException(status_code=400, detail="Code cannot be empty")
+    
     return {
         "received_code": submission.code,
         "length": len(submission.code)
