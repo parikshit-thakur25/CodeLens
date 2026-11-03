@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from app.analyzer import estimate_complexity
+from app.analyzer import estimate_time_complexity, estimate_space_complexity
+import ast
 
 app = FastAPI()
 
@@ -35,12 +36,15 @@ def analyze_code(submission: CodeSubmission):
         raise HTTPException(status_code=400, detail="Code cannot be empty")
 
     try:
-        complexity = estimate_complexity(submission.code)
+        tree = ast.parse(submission.code)
+        time_complexity = estimate_time_complexity(submission.code, tree)
+        space_complexity = estimate_space_complexity(tree)
     except SyntaxError:
         raise HTTPException(status_code=400, detail="Invalid Python code")
 
     return {
         "received_code": submission.code,
         "length": len(submission.code),
-        "estimated_time_complexity": complexity
+        "estimated_time_complexity": time_complexity,
+        "estimated_space_complexity": space_complexity
     }

@@ -26,9 +26,7 @@ def count_recursive_calls(node, function_name):
     return count
 
 
-def estimate_complexity(code: str) -> str:
-    tree = ast.parse(code)
-
+def estimate_time_complexity(code: str, tree) -> str:
     loop_depth = get_max_loop_depth(tree)
 
     recursive_calls = 0
@@ -52,4 +50,32 @@ def estimate_complexity(code: str) -> str:
         return "O(n^2)"
     else:
         return f"O(n^{depth})"
-    
+
+
+def estimate_space_complexity(tree) -> str:
+    has_new_collection_in_loop = False
+    has_recursion = False
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.For, ast.While)):
+            for inner in ast.walk(node):
+                if isinstance(inner, (ast.List, ast.Dict, ast.Set)):
+                    has_new_collection_in_loop = True
+                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute):
+                    if inner.func.attr in ("append", "add", "update"):
+                        has_new_collection_in_loop = True
+
+        if isinstance(node, ast.FunctionDef):
+            calls = count_recursive_calls(node, node.name)
+            if calls >= 1:
+                has_recursion = True
+
+    if has_new_collection_in_loop or has_recursion:
+        return "O(n)"
+    else:
+        return "O(1)"
+
+
+def estimate_complexity(code: str) -> str:
+    tree = ast.parse(code)
+    return estimate_time_complexity(code, tree)
