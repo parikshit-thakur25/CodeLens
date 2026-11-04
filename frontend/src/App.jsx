@@ -1,9 +1,21 @@
 import { useState } from 'react'
 import Editor from '@monaco-editor/react'
-import './App.css'
+
+const LANGUAGES = [
+  { value: 'python', label: 'Python', monaco: 'python' },
+  { value: 'java', label: 'Java', monaco: 'java' },
+  { value: 'cpp', label: 'C++', monaco: 'cpp' },
+]
+
+const DEFAULT_CODE = {
+  python: 'def example(nums):\n    # paste your Python function here\n    pass',
+  java: 'public int example(int[] nums) {\n    // paste your Java function here\n    return 0;\n}',
+  cpp: 'int example(vector<int> nums) {\n    // paste your C++ function here\n    return 0;\n}',
+}
 
 function App() {
-  const [code, setCode] = useState('def example(nums):\n    # paste your Python function here\n    pass')
+  const [language, setLanguage] = useState('python')
+  const [code, setCode] = useState(DEFAULT_CODE.python)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -11,6 +23,14 @@ function App() {
   const [history, setHistory] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  const handleLanguageChange = (e) => {
+    const newLang = e.target.value
+    setLanguage(newLang)
+    setCode(DEFAULT_CODE[newLang])
+    setResult(null)
+    setError('')
+  }
 
   const handleAnalyze = async () => {
     setError('')
@@ -21,7 +41,7 @@ function App() {
       const response = await fetch('http://127.0.0.1:8000/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, language })
       })
 
       const data = await response.json()
@@ -57,64 +77,107 @@ function App() {
     }
   }
 
+  const currentMonacoLang = LANGUAGES.find((l) => l.value === language)?.monaco
+
   return (
-    <div style={{ maxWidth: '700px', margin: '40px auto', fontFamily: 'sans-serif' }}>
-      <h1>CodeLens</h1>
-      <p>Paste a Python function below to estimate its time and space complexity.</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        <h1 className="text-4xl font-bold tracking-tight">
+          Code<span className="text-emerald-400">Lens</span>
+        </h1>
+        <p className="mt-2 text-slate-400">
+          Paste a function below to estimate its time and space complexity.
+        </p>
 
-      <div style={{ border: '1px solid #444', borderRadius: '8px', overflow: 'hidden' }}>
-        <Editor
-          height="300px"
-          defaultLanguage="python"
-          value={code}
-          onChange={(value) => setCode(value || '')}
-          theme="vs-dark"
-          options={{
-            fontSize: 14,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-          }}
-        />
-      </div>
-
-      <br />
-      <button onClick={handleAnalyze} disabled={loading} style={{ padding: '8px 16px' }}>
-        {loading ? 'Analyzing...' : 'Analyze'}
-      </button>
-      {' '}
-      <button onClick={handleToggleHistory} disabled={historyLoading} style={{ padding: '8px 16px' }}>
-        {historyLoading ? 'Loading...' : showHistory ? 'Hide History' : 'View History'}
-      </button>
-
-      {error && (
-        <p style={{ color: 'red', marginTop: '20px' }}>{error}</p>
-      )}
-
-      {result && (
-        <div style={{ marginTop: '20px', padding: '16px', border: '1px solid #ccc', borderRadius: '8px' }}>
-          <p><strong>Time Complexity:</strong> {result.estimated_time_complexity}</p>
-          <p><strong>Space Complexity:</strong> {result.estimated_space_complexity}</p>
-          <p><strong>Code Length:</strong> {result.length} characters</p>
+        <div className="mt-6">
+          <label className="text-sm text-slate-400 mr-3">Language:</label>
+          <select
+            value={language}
+            onChange={handleLanguageChange}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
         </div>
-      )}
 
-      {showHistory && (
-        <div style={{ marginTop: '30px' }}>
-          <h2>Past Analyses</h2>
-          {history.length === 0 && <p>No history yet.</p>}
-          {history.map((item) => (
-            <div key={item.id} style={{ marginBottom: '12px', padding: '12px', border: '1px solid #444', borderRadius: '8px' }}>
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '13px', margin: 0 }}>{item.code}</pre>
-              <p style={{ margin: '8px 0 0' }}>
-                <strong>Time:</strong> {item.time_complexity} &nbsp;|&nbsp;
-                <strong>Space:</strong> {item.space_complexity}
-              </p>
+        <div className="mt-4 rounded-xl overflow-hidden border border-slate-800 shadow-lg">
+          <Editor
+            height="300px"
+            language={currentMonacoLang}
+            value={code}
+            onChange={(value) => setCode(value || '')}
+            theme="vs-dark"
+            options={{
+              fontSize: 14,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+            }}
+          />
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={handleAnalyze}
+            disabled={loading}
+            className="px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-semibold transition"
+          >
+            {loading ? 'Analyzing...' : 'Analyze'}
+          </button>
+          <button
+            onClick={handleToggleHistory}
+            disabled={historyLoading}
+            className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-100 font-semibold transition"
+          >
+            {historyLoading ? 'Loading...' : showHistory ? 'Hide History' : 'View History'}
+          </button>
+        </div>
+
+        {error && (
+          <p className="mt-6 text-red-400">{error}</p>
+        )}
+
+        {result && (
+          <div className="mt-6 p-5 rounded-xl border border-slate-800 bg-slate-900">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Time</p>
+                <p className="mt-1 text-xl font-bold text-emerald-400">{result.estimated_time_complexity}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Space</p>
+                <p className="mt-1 text-xl font-bold text-emerald-400">{result.estimated_space_complexity}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Length</p>
+                <p className="mt-1 text-xl font-bold text-slate-200">{result.length} chars</p>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+
+        {showHistory && (
+          <div className="mt-10">
+            <h2 className="text-xl font-semibold mb-4">Past Analyses</h2>
+            {history.length === 0 && <p className="text-slate-500">No history yet.</p>}
+            <div className="space-y-3">
+              {history.map((item) => (
+                <div key={item.id} className="p-4 rounded-xl border border-slate-800 bg-slate-900">
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-slate-300">{item.code}</pre>
+                  <p className="mt-3 text-sm text-slate-400">
+                    <span className="text-emerald-400 font-semibold">Time:</span> {item.time_complexity}
+                    <span className="mx-2">|</span>
+                    <span className="text-emerald-400 font-semibold">Space:</span> {item.space_complexity}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-export default App
+export default App  
