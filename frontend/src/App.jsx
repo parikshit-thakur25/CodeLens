@@ -8,6 +8,10 @@ function App() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [history, setHistory] = useState([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   const handleAnalyze = async () => {
     setError('')
     setResult(null)
@@ -31,6 +35,25 @@ function App() {
       setError('Could not reach the backend. Is it running?')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleToggleHistory = async () => {
+    if (showHistory) {
+      setShowHistory(false)
+      return
+    }
+
+    setHistoryLoading(true)
+    try {
+      const response = await fetch('http://127.0.0.1:8000/history')
+      const data = await response.json()
+      setHistory(data)
+      setShowHistory(true)
+    } catch (err) {
+      setError('Could not load history. Is the backend running?')
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -58,6 +81,10 @@ function App() {
       <button onClick={handleAnalyze} disabled={loading} style={{ padding: '8px 16px' }}>
         {loading ? 'Analyzing...' : 'Analyze'}
       </button>
+      {' '}
+      <button onClick={handleToggleHistory} disabled={historyLoading} style={{ padding: '8px 16px' }}>
+        {historyLoading ? 'Loading...' : showHistory ? 'Hide History' : 'View History'}
+      </button>
 
       {error && (
         <p style={{ color: 'red', marginTop: '20px' }}>{error}</p>
@@ -68,6 +95,22 @@ function App() {
           <p><strong>Time Complexity:</strong> {result.estimated_time_complexity}</p>
           <p><strong>Space Complexity:</strong> {result.estimated_space_complexity}</p>
           <p><strong>Code Length:</strong> {result.length} characters</p>
+        </div>
+      )}
+
+      {showHistory && (
+        <div style={{ marginTop: '30px' }}>
+          <h2>Past Analyses</h2>
+          {history.length === 0 && <p>No history yet.</p>}
+          {history.map((item) => (
+            <div key={item.id} style={{ marginBottom: '12px', padding: '12px', border: '1px solid #444', borderRadius: '8px' }}>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '13px', margin: 0 }}>{item.code}</pre>
+              <p style={{ margin: '8px 0 0' }}>
+                <strong>Time:</strong> {item.time_complexity} &nbsp;|&nbsp;
+                <strong>Space:</strong> {item.space_complexity}
+              </p>
+            </div>
+          ))}
         </div>
       )}
     </div>
