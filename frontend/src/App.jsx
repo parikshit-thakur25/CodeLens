@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import Editor from '@monaco-editor/react'
 import './App.css'
 
 function App() {
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState('def example(nums):\n    # paste your Python function here\n    pass')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,16 +39,23 @@ function App() {
       <h1>CodeLens</h1>
       <p>Paste a Python function below to estimate its time and space complexity.</p>
 
-      <textarea
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="def example(nums):&#10;    ..."
-        rows={10}
-        style={{ width: '100%', fontFamily: 'monospace', fontSize: '14px' }}
-      />
+      <div style={{ border: '1px solid #444', borderRadius: '8px', overflow: 'hidden' }}>
+        <Editor
+          height="300px"
+          defaultLanguage="python"
+          value={code}
+          onChange={(value) => setCode(value || '')}
+          theme="vs-dark"
+          options={{
+            fontSize: 14,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+          }}
+        />
+      </div>
 
       <br />
-      <button onClick={handleAnalyze} disabled={loading} style={{ marginTop: '10px', padding: '8px 16px' }}>
+      <button onClick={handleAnalyze} disabled={loading} style={{ padding: '8px 16px' }}>
         {loading ? 'Analyzing...' : 'Analyze'}
       </button>
 
