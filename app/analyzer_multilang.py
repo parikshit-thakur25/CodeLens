@@ -29,6 +29,20 @@ def get_function_name(node):
     name_node = node.child_by_field_name("name")
     if name_node:
         return name_node.text.decode("utf8")
+
+    declarator = node.child_by_field_name("declarator")
+    if declarator:
+        def find_identifier(n):
+            if n.type == "identifier":
+                return n.text.decode("utf8")
+            for child in n.children:
+                result = find_identifier(child)
+                if result:
+                    return result
+            return None
+
+        return find_identifier(declarator)
+
     return None
 
 
