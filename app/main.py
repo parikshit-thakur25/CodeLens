@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.analyzer import estimate_time_complexity, estimate_space_complexity
@@ -9,6 +10,14 @@ import ast
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def get_db():
@@ -77,4 +86,3 @@ def analyze_code(submission: CodeSubmission, db: Session = Depends(get_db)):
 def get_history(db: Session = Depends(get_db)):
     records = db.query(Analysis).order_by(Analysis.created_at.desc()).all()
     return records
-    
