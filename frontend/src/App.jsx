@@ -475,13 +475,13 @@ export default function App() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowWorkspace(true)}
-            className={`p-1.5 px-2.5 rounded border ${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 transition flex items-center gap-1.5 cursor-pointer text-xs`}
+            className={`p-1.5 px-2.5 rounded border ${isLight ? 'border-slate-300 bg-white hover:bg-slate-100 text-slate-800' : `${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5`} transition flex items-center gap-1.5 cursor-pointer text-xs`}
             title="Open Files Explorer"
           >
             <span>📁</span>
             <span className="font-medium hidden sm:inline">Files</span>
             {workspaceFiles.length > 0 && (
-              <span className="font-mono text-[10px] opacity-60">({workspaceFiles.length})</span>
+              <span className={`font-mono text-[10px] ${isLight ? 'text-slate-600 font-bold' : 'opacity-60'}`}>({workspaceFiles.length})</span>
             )}
           </button>
 
@@ -491,15 +491,19 @@ export default function App() {
             title="Return to Guide Tour & Overview"
           >
             <span className="font-semibold text-sm tracking-tight flex items-center gap-1.5">
-              <span className="font-mono text-zinc-400 font-normal">λ</span>
-              <span className={isLight ? 'text-slate-900 font-bold' : 'text-zinc-100 font-bold'}>CodeLens</span>
-              <span className="text-zinc-500 font-normal text-xs">studio</span>
+              <span className={`font-mono ${isLight ? 'text-slate-500 font-bold' : 'text-zinc-400 font-normal'}`}>λ</span>
+              <span className={isLight ? 'text-slate-900 font-extrabold' : 'text-zinc-100 font-bold'}>CodeLens</span>
+              <span className={`${isLight ? 'text-slate-600 font-semibold' : 'text-zinc-500 font-normal'} text-xs`}>studio</span>
             </span>
-            <span className="hidden lg:inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-1.5 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className={`hidden lg:inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+              isLight ? 'text-emerald-800 bg-emerald-100 border border-emerald-300 font-semibold' : 'text-emerald-400 bg-emerald-950/40 border border-emerald-800/40'
+            }`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Sandbox
             </span>
-            <span className="text-[10px] text-zinc-400 border border-zinc-700/60 px-1.5 py-0.5 rounded hover:bg-white/5 transition hidden md:inline-block">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded transition hidden md:inline-block ${
+              isLight ? 'text-slate-700 bg-white border border-slate-300 hover:bg-slate-200 font-medium' : 'text-zinc-400 border border-zinc-700/60 hover:bg-white/5'
+            }`}>
               ← Guide Tour
             </span>
           </button>
@@ -635,7 +639,7 @@ export default function App() {
           <button
             onClick={handleToggleHistory}
             disabled={historyLoading}
-            className={`p-1.5 rounded-md border ${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 text-zinc-400 hover:text-zinc-200 transition cursor-pointer text-xs`}
+            className={`p-1.5 rounded-md border ${isLight ? 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700' : `${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 text-zinc-400 hover:text-zinc-200`} transition cursor-pointer text-xs`}
             title="Past Analysis Records"
           >
             📜
@@ -650,14 +654,16 @@ export default function App() {
           {/* File Tab Header with Save & Export */}
           <div className={`flex items-center justify-between px-3 py-1.5 border-b ${themeConfig.border} ${themeConfig.headerBg} text-xs`}>
             <div className="flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-2.5 py-0.5 rounded ${themeConfig.bg} border ${themeConfig.border} font-mono text-xs shadow-xs`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <div className={`flex items-center gap-2 px-2.5 py-0.5 rounded ${themeConfig.bg} border ${isLight ? 'border-slate-300 text-slate-900 font-bold' : `${themeConfig.border} text-zinc-200 font-mono`} text-xs shadow-xs`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span>{currentFileName}</span>
               </div>
 
               <button
                 onClick={handleOpenSaveModal}
-                className="px-2 py-0.5 rounded hover:bg-white/5 border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px] flex items-center gap-1 cursor-pointer"
+                className={`px-2 py-0.5 rounded border border-transparent transition text-[11px] flex items-center gap-1 cursor-pointer font-medium ${
+                  isLight ? 'text-slate-700 hover:text-slate-950 hover:bg-slate-200 hover:border-slate-300' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 hover:border-zinc-700'
+                }`}
                 title="Save file to workspace"
               >
                 <span>💾</span>
@@ -666,7 +672,9 @@ export default function App() {
 
               <button
                 onClick={handleDownloadFile}
-                className="px-2 py-0.5 rounded hover:bg-white/5 border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px] flex items-center gap-1 cursor-pointer"
+                className={`px-2 py-0.5 rounded border border-transparent transition text-[11px] flex items-center gap-1 cursor-pointer font-medium ${
+                  isLight ? 'text-slate-700 hover:text-slate-950 hover:bg-slate-200 hover:border-slate-300' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 hover:border-zinc-700'
+                }`}
                 title="Download file to computer"
               >
                 <span>📥</span>
@@ -679,25 +687,29 @@ export default function App() {
                 onClick={() => setShowStdin(!showStdin)}
                 className={`px-2 py-0.5 rounded text-[11px] font-mono transition flex items-center gap-1 border ${
                   showStdin
-                    ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                    ? isLight ? 'bg-blue-100 text-blue-800 border-blue-400 font-bold' : 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                    : isLight ? 'border-transparent text-slate-700 hover:text-slate-950 hover:bg-slate-200' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
                 }`}
               >
                 <span>STDIN</span>
-                {stdin.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                {stdin.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
               </button>
 
               <button
                 onClick={handleCopyCode}
-                className="px-2 py-0.5 rounded border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px]"
+                className={`px-2 py-0.5 rounded border border-transparent transition text-[11px] font-medium ${
+                  isLight ? 'text-slate-700 hover:text-slate-950 hover:bg-slate-200 hover:border-slate-300' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 hover:border-zinc-700'
+                }`}
                 title="Copy Code"
               >
-                {copied ? <span className="text-emerald-400">✓ Copied</span> : <span>Copy</span>}
+                {copied ? <span className="text-emerald-600 font-bold">✓ Copied</span> : <span>Copy</span>}
               </button>
 
               <button
                 onClick={() => setCode(DEFAULT_CODE[language])}
-                className="px-2 py-0.5 rounded border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px]"
+                className={`px-2 py-0.5 rounded border border-transparent transition text-[11px] font-medium ${
+                  isLight ? 'text-slate-700 hover:text-slate-950 hover:bg-slate-200 hover:border-slate-300' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 hover:border-zinc-700'
+                }`}
                 title="Reset to boilerplate"
               >
                 Reset
@@ -750,7 +762,7 @@ export default function App() {
           </div>
 
           {/* Editor Status Bar — VS Code Style */}
-          <div className={`px-3 py-1 border-t ${themeConfig.border} ${themeConfig.headerBg} flex items-center justify-between text-[11px] font-mono text-zinc-400`}>
+          <div className={`px-3 py-1 border-t ${themeConfig.border} ${themeConfig.headerBg} flex items-center justify-between text-[11px] font-mono ${isLight ? 'text-slate-700 font-medium' : 'text-zinc-400'}`}>
             <div className="flex items-center gap-3">
               <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
               <span>•</span>
@@ -776,13 +788,13 @@ export default function App() {
                 onClick={() => setActiveTab('console')}
                 className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
                   activeTab === 'console'
-                    ? `${themeConfig.bg} font-semibold shadow-xs border ${themeConfig.border}`
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? `${themeConfig.bg} ${isLight ? 'text-slate-900 font-bold border-slate-300' : 'text-zinc-100 font-semibold'} shadow-xs border ${themeConfig.border}`
+                    : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 <span>Terminal Output</span>
                 {runResult && (
-                  <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                  <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                 )}
               </button>
 
@@ -790,12 +802,12 @@ export default function App() {
                 onClick={() => setActiveTab('diagnostics')}
                 className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
                   activeTab === 'diagnostics'
-                    ? `${themeConfig.bg} font-semibold shadow-xs border ${themeConfig.border}`
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? `${themeConfig.bg} ${isLight ? 'text-slate-900 font-bold border-slate-300' : 'text-zinc-100 font-semibold'} shadow-xs border ${themeConfig.border}`
+                    : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 <span>Complexity Diagnostics</span>
-                {analysisResult && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-indigo-400" />}
+                {analysisResult && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-indigo-500" />}
               </button>
             </div>
 
@@ -805,7 +817,9 @@ export default function App() {
                 setAnalysisResult(null)
                 setError('')
               }}
-              className="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded hover:bg-white/5 transition"
+              className={`text-[11px] font-mono px-2 py-0.5 rounded transition ${
+                isLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 font-medium' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+              }`}
             >
               Clear
             </button>
@@ -824,11 +838,11 @@ export default function App() {
             {/* Terminal Tab */}
             {activeTab === 'console' && (
               <div className="flex flex-col h-full font-mono text-xs">
-                <div className={`flex items-center justify-between text-zinc-400 mb-2 pb-1.5 border-b ${themeConfig.border}`}>
+                <div className={`flex items-center justify-between ${isLight ? 'text-slate-700' : 'text-zinc-400'} mb-2 pb-1.5 border-b ${themeConfig.border}`}>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-zinc-500 font-mono">Terminal Output</span>
+                    <span className={`text-[11px] font-mono ${isLight ? 'text-slate-800 font-bold' : 'text-zinc-500'}`}>Terminal Output</span>
                     {runResult && (
-                      <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline">
+                      <span className={`text-[10px] font-mono hidden sm:inline ${isLight ? 'text-slate-600 font-medium' : 'text-zinc-500'}`}>
                         • {language.toUpperCase()} Sandbox
                       </span>
                     )}
@@ -837,12 +851,16 @@ export default function App() {
                   {runResult && (
                     <div className="flex items-center gap-2 text-[11px]">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 ${
-                        runResult.success ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        runResult.success
+                          ? isLight ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : isLight ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         Exit {runResult.exit_code || (runResult.success ? 0 : 1)}
                       </span>
-                      <span className="text-zinc-400 font-mono text-[10px] bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-700/40">
+                      <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border ${
+                        isLight ? 'bg-slate-200 text-slate-800 border-slate-300 font-bold' : 'bg-zinc-800/60 text-zinc-400 border-zinc-700/40'
+                      }`}>
                         ⚡ {runResult.execution_time_ms} ms
                       </span>
                       <button
@@ -851,7 +869,9 @@ export default function App() {
                           navigator.clipboard.writeText(out.trim())
                           showToast('✓ Terminal output copied')
                         }}
-                        className="text-[10px] text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 rounded border border-zinc-700/60 hover:bg-white/5 transition flex items-center gap-1 cursor-pointer font-mono"
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition flex items-center gap-1 cursor-pointer font-mono ${
+                          isLight ? 'text-slate-700 bg-white border-slate-300 hover:bg-slate-100 hover:text-slate-900' : 'text-zinc-400 border-zinc-700/60 hover:bg-white/5 hover:text-zinc-200'
+                        }`}
                         title="Copy console output"
                       >
                         <span>📋</span>
@@ -861,32 +881,32 @@ export default function App() {
                   )}
                 </div>
 
-                <div className={`flex-1 ${isLight ? 'bg-slate-50' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[400px] font-mono text-xs`}>
+                <div className={`flex-1 ${isLight ? 'bg-white' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[400px] font-mono text-xs`}>
                   {running ? (
                     <div className="flex items-center justify-center h-full text-zinc-400 gap-2 py-16">
                       <div className="w-4 h-4 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-                      <span>Executing in high-speed sandbox...</span>
+                      <span className={isLight ? 'text-slate-700 font-medium' : 'text-zinc-400'}>Executing in high-speed sandbox...</span>
                     </div>
                   ) : runResult ? (
                     <div className="space-y-1">
                       {runResult.stdout && (
-                        <pre className="text-emerald-400 whitespace-pre-wrap leading-relaxed">
+                        <pre className={`${isLight ? 'text-emerald-700 font-semibold' : 'text-emerald-400'} whitespace-pre-wrap leading-relaxed`}>
                           {runResult.stdout}
                         </pre>
                       )}
                       {runResult.stderr && (
-                        <pre className="text-rose-400 whitespace-pre-wrap leading-relaxed mt-2 p-2 rounded bg-rose-950/20 border border-rose-900/40">
+                        <pre className={`${isLight ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-rose-400 bg-rose-950/20 border-rose-900/40'} whitespace-pre-wrap leading-relaxed mt-2 p-2 rounded border`}>
                           {runResult.stderr}
                         </pre>
                       )}
                       {!runResult.stdout && !runResult.stderr && (
-                        <p className="text-zinc-500 italic">Program finished with no output.</p>
+                        <p className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} italic`}>Program finished with no output.</p>
                       )}
                     </div>
                   ) : (
-                    <div className="text-zinc-500 flex flex-col items-center justify-center h-full py-20 gap-1 text-center">
-                      <p className="font-mono text-xs">Terminal ready</p>
-                      <p className="text-[11px] text-zinc-500">
+                    <div className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} flex flex-col items-center justify-center h-full py-20 gap-1 text-center`}>
+                      <p className="font-mono text-xs font-semibold">Terminal ready</p>
+                      <p className="text-[11px]">
                         Press Run or ⌘+Enter to execute code.
                       </p>
                     </div>
@@ -901,13 +921,13 @@ export default function App() {
                 {analyzing ? (
                   <div className="flex items-center justify-center min-h-[380px] text-zinc-400 gap-2">
                     <div className="w-4 h-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-                    <span>Analyzing code structure & loops...</span>
+                    <span className={isLight ? 'text-slate-700 font-medium' : 'text-zinc-400'}>Analyzing code structure & loops...</span>
                   </div>
                 ) : analysisResult ? (
                   <>
                     {/* Big-O Spectrum Radar */}
-                    <div className={`p-2.5 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
-                      <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-1.5 font-mono">
+                    <div className={`p-2.5 rounded border ${isLight ? 'bg-white border-slate-300 shadow-xs' : `${themeConfig.border} bg-[#181818]`}`}>
+                      <div className={`flex items-center justify-between text-[11px] mb-1.5 font-mono ${isLight ? 'text-slate-700 font-bold' : 'text-zinc-500'}`}>
                         <span>COMPLEXITY RATING</span>
                         <span>O(1) ➔ O(2^n)</span>
                       </div>
@@ -920,8 +940,12 @@ export default function App() {
                               key={item.label}
                               className={`p-1.5 rounded text-center border transition ${
                                 isActive
-                                  ? 'bg-gradient-to-b from-blue-600/30 to-indigo-600/20 border-blue-500 text-white font-bold ring-1 ring-blue-500/70 shadow-sm shadow-blue-500/20'
-                                  : 'border-transparent text-zinc-500 opacity-60'
+                                  ? isLight
+                                    ? 'bg-blue-600 text-white font-extrabold border-blue-600 shadow-md shadow-blue-500/30 ring-1 ring-blue-600'
+                                    : 'bg-gradient-to-b from-blue-600/30 to-indigo-600/20 border-blue-500 text-white font-bold ring-1 ring-blue-500/70 shadow-sm shadow-blue-500/20'
+                                  : isLight
+                                    ? 'border-slate-300 bg-slate-50 text-slate-700 font-medium hover:border-slate-400'
+                                    : 'border-transparent text-zinc-500 opacity-60'
                               }`}
                             >
                               <p className="font-mono text-[11px]">{item.label}</p>
@@ -933,20 +957,20 @@ export default function App() {
 
                     {/* Dual Metric Cards */}
                     <div className="grid grid-cols-2 gap-2">
-                      <div className={`p-3 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
-                        <span className="text-[10px] uppercase font-mono text-zinc-500 font-semibold block">
+                      <div className={`p-3 rounded border ${isLight ? 'bg-white border-slate-300 shadow-xs' : `${themeConfig.border} bg-[#181818]`}`}>
+                        <span className={`text-[10px] uppercase font-mono font-semibold block ${isLight ? 'text-slate-600 font-bold' : 'text-zinc-500'}`}>
                           Time Complexity
                         </span>
-                        <p className="mt-1 text-xl font-bold font-mono text-emerald-400">
+                        <p className={`mt-1 text-xl font-bold font-mono ${isLight ? 'text-emerald-700 font-extrabold' : 'text-emerald-400'}`}>
                           {analysisResult.estimated_time_complexity}
                         </p>
                       </div>
 
-                      <div className={`p-3 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
-                        <span className="text-[10px] uppercase font-mono text-zinc-500 font-semibold block">
+                      <div className={`p-3 rounded border ${isLight ? 'bg-white border-slate-300 shadow-xs' : `${themeConfig.border} bg-[#181818]`}`}>
+                        <span className={`text-[10px] uppercase font-mono font-semibold block ${isLight ? 'text-slate-600 font-bold' : 'text-zinc-500'}`}>
                           Auxiliary Space
                         </span>
-                        <p className="mt-1 text-xl font-bold font-mono text-indigo-400">
+                        <p className={`mt-1 text-xl font-bold font-mono ${isLight ? 'text-indigo-700 font-extrabold' : 'text-indigo-400'}`}>
                           {analysisResult.estimated_space_complexity}
                         </p>
                       </div>
@@ -956,19 +980,31 @@ export default function App() {
                     {activeSpectrumIdx >= 0 && (
                       <div>
                         {activeSpectrumIdx <= 1 && (
-                          <div className="p-2.5 rounded border border-emerald-800/40 bg-emerald-950/20 text-emerald-300 text-xs flex items-center gap-2">
+                          <div className={`p-2.5 rounded border text-xs flex items-center gap-2 ${
+                            isLight
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-950 font-medium'
+                              : 'border-emerald-800/40 bg-emerald-950/20 text-emerald-300'
+                          }`}>
                             <span>⚡</span>
                             <span><strong>Optimal Efficiency:</strong> Sub-linear scaling. Handles large-scale datasets with minimal latency.</span>
                           </div>
                         )}
                         {activeSpectrumIdx >= 2 && activeSpectrumIdx <= 3 && (
-                          <div className="p-2.5 rounded border border-blue-800/40 bg-blue-950/20 text-blue-300 text-xs flex items-center gap-2">
+                          <div className={`p-2.5 rounded border text-xs flex items-center gap-2 ${
+                            isLight
+                              ? 'border-blue-300 bg-blue-50 text-blue-950 font-medium'
+                              : 'border-blue-800/40 bg-blue-950/20 text-blue-300'
+                          }`}>
                             <span>🔷</span>
                             <span><strong>Scalable Efficiency:</strong> Linear or linearithmic runtime. Standard production efficiency.</span>
                           </div>
                         )}
                         {activeSpectrumIdx >= 4 && (
-                          <div className="p-2.5 rounded border border-amber-800/40 bg-amber-950/20 text-amber-300 text-xs flex items-center gap-2">
+                          <div className={`p-2.5 rounded border text-xs flex items-center gap-2 ${
+                            isLight
+                              ? 'border-amber-300 bg-amber-50 text-amber-950 font-medium'
+                              : 'border-amber-800/40 bg-amber-950/20 text-amber-300'
+                          }`}>
                             <span>⚠️</span>
                             <span><strong>Performance Bottleneck:</strong> Nested loops or recursion detected. Consider hash maps or two-pointer techniques.</span>
                           </div>
@@ -978,11 +1014,11 @@ export default function App() {
 
                     {/* Reasoning Breakdown */}
                     {analysisResult.explanation && (
-                      <div className={`p-3 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
-                        <p className="text-xs font-semibold mb-1 flex items-center gap-1.5 text-zinc-300">
+                      <div className={`p-3 rounded border ${isLight ? 'bg-white border-slate-300 shadow-xs' : `${themeConfig.border} bg-[#181818]`}`}>
+                        <p className={`text-xs font-semibold mb-1 flex items-center gap-1.5 ${isLight ? 'text-slate-900 font-bold' : 'text-zinc-300'}`}>
                           <span>💡</span> Diagnostic Breakdown
                         </p>
-                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                        <p className={`text-xs leading-relaxed font-sans ${isLight ? 'text-slate-700 font-normal' : 'text-zinc-400'}`}>
                           {analysisResult.explanation}
                         </p>
                       </div>
@@ -991,7 +1027,7 @@ export default function App() {
                     {/* Bottlenecks List */}
                     {analysisResult.bottlenecks && analysisResult.bottlenecks.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">
+                        <p className={`text-[10px] font-mono uppercase tracking-wider font-semibold mb-1.5 ${isLight ? 'text-slate-700 font-bold' : 'text-zinc-500'}`}>
                           Detected Loop & Recursion Lines
                         </p>
                         <div className="space-y-1.5">
@@ -999,18 +1035,26 @@ export default function App() {
                             <div
                               key={idx}
                               onClick={() => jumpToLine(b.line)}
-                              className={`p-2.5 rounded border ${themeConfig.border} hover:border-zinc-500 cursor-pointer transition flex items-start gap-2.5 group ${isLight ? 'bg-slate-50 hover:bg-slate-100' : 'bg-[#181818] hover:bg-[#202020]'}`}
+                              className={`p-2.5 rounded border cursor-pointer transition flex items-start gap-2.5 group ${
+                                isLight
+                                  ? 'bg-white hover:bg-slate-50 border-slate-300 shadow-xs'
+                                  : `bg-[#181818] hover:bg-[#202020] ${themeConfig.border} hover:border-zinc-500`
+                              }`}
                               title="Click to jump to line in editor"
                             >
-                              <span className="px-1.5 py-0.5 rounded font-mono text-xs font-semibold bg-white/10 group-hover:bg-blue-600 group-hover:text-white transition">
+                              <span className={`px-1.5 py-0.5 rounded font-mono text-xs font-semibold transition ${
+                                isLight
+                                  ? 'bg-slate-200 text-slate-800 group-hover:bg-blue-600 group-hover:text-white'
+                                  : 'bg-white/10 text-zinc-200 group-hover:bg-blue-600 group-hover:text-white'
+                              }`}>
                                 L{b.line}
                               </span>
                               <div className="flex-1">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs font-medium text-zinc-300">{b.type}</span>
-                                  <span className="text-xs font-mono font-bold text-amber-400">{b.complexity}</span>
+                                  <span className={`text-xs font-medium ${isLight ? 'text-slate-900 font-bold' : 'text-zinc-300'}`}>{b.type}</span>
+                                  <span className={`text-xs font-mono font-bold ${isLight ? 'text-amber-700 font-extrabold' : 'text-amber-400'}`}>{b.complexity}</span>
                                 </div>
-                                <p className="text-[11px] text-zinc-400 mt-0.5 font-sans leading-normal">
+                                <p className={`text-[11px] mt-0.5 font-sans leading-normal ${isLight ? 'text-slate-600' : 'text-zinc-400'}`}>
                                   {b.reason}
                                 </p>
                               </div>
@@ -1041,11 +1085,13 @@ export default function App() {
             <div className={`flex items-center justify-between pb-3 border-b ${themeConfig.border}`}>
               <div className="flex items-center gap-2">
                 <span className="text-base">📁</span>
-                <h3 className="text-sm font-semibold">Workspace Files</h3>
+                <h3 className={`text-sm font-semibold ${isLight ? 'text-slate-900 font-bold' : ''}`}>Workspace Files</h3>
               </div>
               <button
                 onClick={() => setShowWorkspace(false)}
-                className="w-7 h-7 rounded hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+                className={`w-7 h-7 rounded hover:bg-white/10 flex items-center justify-center transition cursor-pointer ${
+                  isLight ? 'text-slate-600 hover:text-slate-950' : 'text-zinc-400 hover:text-white'
+                }`}
               >
                 ✕
               </button>
@@ -1058,7 +1104,7 @@ export default function App() {
                 className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
                   workspaceLang === 'all'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    : isLight ? 'text-slate-700 hover:text-slate-950' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 All ({workspaceFiles.length})
@@ -1072,7 +1118,7 @@ export default function App() {
                     className={`px-2 py-1 rounded text-xs font-medium transition flex items-center gap-1 cursor-pointer ${
                       workspaceLang === l.value
                         ? 'bg-blue-600 text-white font-semibold'
-                        : 'text-zinc-400 hover:text-zinc-200'
+                        : isLight ? 'text-slate-700 hover:text-slate-950' : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
                     <span>{l.badge}</span>
@@ -1086,10 +1132,10 @@ export default function App() {
             {/* Workspace File List */}
             <div className="flex-1 overflow-y-auto py-2.5 space-y-1.5">
               {filteredWorkspaceFiles.length === 0 ? (
-                <div className="text-center py-12 text-zinc-500">
+                <div className={`text-center py-12 ${isLight ? 'text-slate-500' : 'text-zinc-500'}`}>
                   <p className="text-xl mb-1">📂</p>
                   <p className="text-xs">No files saved in this section yet.</p>
-                  <p className="text-[11px] text-zinc-500 mt-1">
+                  <p className="text-[11px] mt-1">
                     Click &quot;Save&quot; in the editor to store snippets.
                   </p>
                 </div>
@@ -1097,7 +1143,11 @@ export default function App() {
                 filteredWorkspaceFiles.map((f) => (
                   <div
                     key={f.id}
-                    className={`p-2.5 rounded border ${themeConfig.border} ${themeConfig.bg} hover:border-zinc-500 transition flex items-center justify-between group`}
+                    className={`p-2.5 rounded border transition flex items-center justify-between group ${
+                      isLight
+                        ? 'bg-white border-slate-300 hover:border-slate-400 shadow-xs'
+                        : `${themeConfig.border} ${themeConfig.bg} hover:border-zinc-500`
+                    }`}
                   >
                     <div
                       onClick={() => handleLoadFile(f)}
@@ -1105,11 +1155,11 @@ export default function App() {
                     >
                       <div className="flex items-center gap-2">
                         <span>{LANGUAGES.find((l) => l.value === f.language)?.badge || '📄'}</span>
-                        <span className="text-xs font-medium text-zinc-200 font-mono group-hover:text-blue-400 transition">
+                        <span className={`text-xs font-mono group-hover:text-blue-500 transition ${isLight ? 'text-slate-900 font-bold' : 'text-zinc-200 font-medium'}`}>
                           {f.name}
                         </span>
                       </div>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                      <p className={`text-[10px] font-mono mt-0.5 ${isLight ? 'text-slate-600' : 'text-zinc-500'}`}>
                         {f.language.toUpperCase()} • {f.code.length} chars
                       </p>
                     </div>
@@ -1117,13 +1167,13 @@ export default function App() {
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleLoadFile(f)}
-                        className="px-2 py-0.5 rounded text-[11px] bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition cursor-pointer"
+                        className="px-2 py-0.5 rounded text-[11px] bg-blue-600/20 text-blue-500 hover:bg-blue-600/30 transition cursor-pointer font-medium"
                       >
                         Open
                       </button>
                       <button
                         onClick={() => handleDeleteFile(f.id)}
-                        className="text-zinc-500 hover:text-rose-400 p-1 transition text-xs cursor-pointer"
+                        className="text-zinc-400 hover:text-rose-500 p-1 transition text-xs cursor-pointer"
                         title="Delete File"
                       >
                         🗑️
@@ -1134,9 +1184,9 @@ export default function App() {
               )}
             </div>
 
-            <div className={`pt-2.5 border-t ${themeConfig.border} text-[11px] text-zinc-500 flex items-center justify-between`}>
+            <div className={`pt-2.5 border-t ${themeConfig.border} text-[11px] flex items-center justify-between ${isLight ? 'text-slate-700 font-medium' : 'text-zinc-500'}`}>
               <span>Local browser storage</span>
-              <span className="text-zinc-400 font-mono">Zero login required</span>
+              <span className={`font-mono ${isLight ? 'text-slate-600 font-semibold' : 'text-zinc-400'}`}>Zero login required</span>
             </div>
           </div>
         </div>
@@ -1146,10 +1196,10 @@ export default function App() {
       {saveModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
           <div className={`w-full max-w-sm ${themeConfig.surface} border ${themeConfig.border} rounded-lg p-4 shadow-2xl`}>
-            <h3 className="text-xs font-semibold mb-1 flex items-center gap-1.5 text-zinc-200">
+            <h3 className={`text-xs font-semibold mb-1 flex items-center gap-1.5 ${isLight ? 'text-slate-900 font-bold' : 'text-zinc-200'}`}>
               <span>💾</span> Save to {language.toUpperCase()} Section
             </h3>
-            <p className="text-xs text-zinc-400 mb-3">
+            <p className={`text-xs mb-3 ${isLight ? 'text-slate-600' : 'text-zinc-400'}`}>
               Enter file name:
             </p>
 
@@ -1158,14 +1208,14 @@ export default function App() {
               value={saveFileName}
               onChange={(e) => setSaveFileName(e.target.value)}
               placeholder="e.g. solution.py"
-              className={`w-full ${themeConfig.bg} border ${themeConfig.border} rounded px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500 mb-3`}
+              className={`w-full ${themeConfig.bg} border ${isLight ? 'border-slate-300 text-slate-900 focus:bg-white' : `${themeConfig.border}`} rounded px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500 mb-3`}
               autoFocus
             />
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setSaveModalOpen(false)}
-                className="px-3 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200 transition"
+                className={`px-3 py-1 rounded text-xs transition ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-zinc-400 hover:text-zinc-200'}`}
               >
                 Cancel
               </button>
@@ -1187,14 +1237,14 @@ export default function App() {
             <div className={`flex items-center justify-between pb-3 border-b ${themeConfig.border}`}>
               <div className="flex items-center gap-2">
                 <span className="text-base">📜</span>
-                <h3 className="text-sm font-semibold">Analysis History</h3>
+                <h3 className={`text-sm font-semibold ${isLight ? 'text-slate-900 font-bold' : ''}`}>Analysis History</h3>
               </div>
 
               <div className="flex items-center gap-2">
                 {history.length > 0 && (
                   <button
                     onClick={handleClearAllHistory}
-                    className="text-xs text-rose-400 hover:text-rose-300 hover:underline cursor-pointer"
+                    className="text-xs text-rose-500 hover:text-rose-600 hover:underline cursor-pointer font-medium"
                     title="Delete all history"
                   >
                     Clear All
@@ -1202,7 +1252,7 @@ export default function App() {
                 )}
                 <button
                   onClick={() => setShowHistory(false)}
-                  className="w-7 h-7 rounded hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+                  className={`w-7 h-7 rounded hover:bg-white/10 flex items-center justify-center transition cursor-pointer ${isLight ? 'text-slate-600 hover:text-slate-950' : 'text-zinc-400 hover:text-white'}`}
                 >
                   ✕
                 </button>
@@ -1211,42 +1261,49 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto py-3 space-y-2">
               {history.length === 0 ? (
-                <p className="text-zinc-500 text-xs italic text-center py-12 font-mono">
+                <p className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} text-xs italic text-center py-12 font-mono`}>
                   No previous records found.
                 </p>
               ) : (
                 history.map((item) => (
                   <div
                     key={item.id}
-                    className={`p-3 rounded border ${themeConfig.border} ${themeConfig.bg} hover:border-zinc-500 transition group`}
+                    className={`p-3 rounded border transition group ${
+                      isLight
+                        ? 'bg-white border-slate-300 hover:border-slate-400 shadow-xs'
+                        : `${themeConfig.border} ${themeConfig.bg} hover:border-zinc-500`
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-mono text-zinc-500">Record #{item.id}</span>
+                      <span className={`text-[10px] font-mono ${isLight ? 'text-slate-600 font-semibold' : 'text-zinc-500'}`}>Record #{item.id}</span>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1.5 text-xs font-mono font-semibold">
-                          <span className="text-emerald-400">{item.time_complexity}</span>
-                          <span className="text-zinc-500">•</span>
-                          <span className="text-indigo-400">{item.space_complexity}</span>
+                          <span className={isLight ? 'text-emerald-700 font-bold' : 'text-emerald-400'}>{item.time_complexity}</span>
+                          <span className={isLight ? 'text-slate-400' : 'text-zinc-500'}>•</span>
+                          <span className={isLight ? 'text-indigo-700 font-bold' : 'text-indigo-400'}>{item.space_complexity}</span>
                         </div>
                         {/* Delete Single History Record Button */}
                         <button
                           onClick={(e) => handleDeleteHistoryItem(item.id, e)}
-                          className="text-zinc-500 hover:text-rose-400 p-0.5 transition cursor-pointer text-xs"
+                          className="text-zinc-400 hover:text-rose-500 p-0.5 transition cursor-pointer text-xs"
                           title="Delete this record"
                         >
                           🗑️
                         </button>
                       </div>
                     </div>
-                    <pre className={`text-[11px] text-zinc-400 font-mono line-clamp-3 p-2 rounded border ${themeConfig.border} overflow-hidden ${isLight ? 'bg-white' : 'bg-[#181818]'}`}>
+                    <pre className={`text-[11px] font-mono line-clamp-3 p-2 rounded border overflow-hidden ${
+                      isLight ? 'bg-slate-50 text-slate-800 border-slate-200' : `${themeConfig.border} bg-[#181818] text-zinc-400`
+                    }`}>
                       {item.code}
                     </pre>
                     <button
                       onClick={() => {
                         setCode(item.code)
                         setShowHistory(false)
+                        showToast(`Loaded Record #${item.id}`)
                       }}
-                      className="mt-1.5 text-xs font-medium text-blue-400 hover:underline transition flex items-center gap-1 cursor-pointer"
+                      className="mt-1.5 text-xs font-medium text-blue-500 hover:underline transition flex items-center gap-1 cursor-pointer"
                     >
                       <span>Load into editor</span>
                       <span>→</span>
