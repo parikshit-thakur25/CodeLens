@@ -307,7 +307,7 @@ Session memory restored.`,
             </h1>
 
             <p className="text-sm sm:text-base text-zinc-400 max-w-xl leading-relaxed">
-              CodeLens Studio is a high-performance web compiler for Python, C, C++, and Java paired with real-time Tree-Sitter algorithmic diagnostics. Catch $O(n^2)$ bottlenecks before deployment.
+              CodeLens Studio is a high-performance online IDE for Python, C, C++, and Java with sub-second cloud execution and real-time algorithmic complexity diagnostics.
             </p>
 
             {/* Feature Pills */}
