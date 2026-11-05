@@ -2,12 +2,17 @@
 
 # 🔍 CodeLens Studio
 
-### Multi-language Online Compiler & Algorithmic Complexity Diagnostics
+### High-Performance Online IDE & Real-Time Algorithmic Complexity Diagnostics
+
+**🌐 Live Studio:** [codelens.parikshit07.tech](https://codelens.parikshit07.tech)  
+**⚡ Backend API:** [codelens-ijv2.onrender.com](https://codelens-ijv2.onrender.com)
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat&logo=python&logoColor=white)
+![C](https://img.shields.io/badge/C-GCC_13-A8B9CC?style=flat&logo=c&logoColor=white)
+![C++](https://img.shields.io/badge/C++-20_GCC_13-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+![Java](https://img.shields.io/badge/Java-21_LTS-ED8B00?style=flat&logo=openjdk&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-Vite-61DAFB?style=flat&logo=react&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Render-4169E1?style=flat&logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-19_Vite-61DAFB?style=flat&logo=react&logoColor=white)
 ![Status](https://img.shields.io/badge/status-active-emerald?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat)
 
@@ -17,9 +22,9 @@
 
 ## 💡 Why I built this
 
-I'm a 3rd semester CSE (AI-DS) student, and complexity analysis (Big-O) was one of the topics I understood in theory but wanted to see applied in real tools. I decided to build **CodeLens Studio** — an interactive online code execution sandbox and structural complexity analyzer.
+I'm a 3rd semester CSE (AI-DS) student, and complexity analysis (Big-O) was one of the topics I understood in theory but wanted to see applied in real tools. I built **CodeLens Studio** — a friction-free, zero-login online code execution sandbox and structural complexity analyzer.
 
-Instead of running untrusted code for complexity or guessing Big-O with simple heuristics, CodeLens uses **Python AST** and **Tree-Sitter syntax trees** to inspect code structure, loop nesting, logarithmic counter stepping, recursion branching, and auxiliary data structures — coupled with a secure sandbox compiler.
+Instead of running untrusted code for complexity or guessing Big-O with simple heuristics, CodeLens uses **Python AST** and **Tree-Sitter syntax trees** to inspect code structure, loop nesting, logarithmic counter stepping, recursion branching, and auxiliary data structures — coupled with a sub-second secure sandbox compiler.
 
 ---
 
@@ -27,15 +32,15 @@ Instead of running untrusted code for complexity or guessing Big-O with simple h
 
 | Status | Feature |
 |--------|---------|
-| ✅ | **Online Multi-Language Compiler** (`/run`) — compile & execute Python 3, Java 21, and C++ 20 in a secure sandbox |
-| ✅ | **Real-Time Terminal Output** — live stdout, stderr, exit codes, and millisecond execution timer |
+| ✅ | **Zero-Login Frictionless Studio** — instant access, no sign-in or authentication barriers |
+| ✅ | **High-Speed Multi-Language Compiler** (`/run`) — execute Python 3.12, C (GCC 13), C++ 20, and Java 21 in sub-second sandboxes |
 | ✅ | **Big-O Static Analysis Engine** (`/analyze`) — calculates Time and Space Complexity without arbitrary code execution |
 | ✅ | **Logarithmic ($O(\log n)$) & Constant Detection** — detects Binary Search partitions, geometric step updates, and fixed loop bounds |
-| ✅ | **Line-by-Line Bottleneck Diagnostics** — pinpoint exact lines causing complexity spikes |
-| ✅ | **Tree-Sitter Multilingual Parsing** — AST-level precision for Java and C++ syntax |
-| ✅ | **PostgreSQL Persistence** (Render) & SQLite local fallback |
-| ✅ | **React + Monaco Editor IDE** — VS Code experience, custom syntax themes, stdin drawer |
-| ✅ | **CORS & Deployment Ready** — automated origin handling for Vercel, Render, and custom domains |
+| ✅ | **Line-by-Line Bottleneck Diagnostics** — pinpoint exact lines causing complexity spikes with direct editor jump |
+| ✅ | **Tree-Sitter Multilingual Parsing** — AST-level precision for Python, C, C++, and Java syntax |
+| ✅ | **Persistent Local Workspace** — save, load, and export snippets locally in browser storage with zero cloud login required |
+| ✅ | **React + Monaco Editor IDE** — VS Code experience, custom themes (VS Code Dark, Obsidian, Clean Light), stdin drawer |
+| ✅ | **Seamless Browser Navigation** — browser history (`←`) smoothly transitions between compiler and interactive guide tour |
 
 ---
 
@@ -46,12 +51,12 @@ Instead of running untrusted code for complexity or guessing Big-O with simple h
 <td valign="top" width="50%">
 
 **Backend**
-- FastAPI & Uvicorn
+- FastAPI & Uvicorn (Asynchronous Python Web Server)
 - Pydantic v2
+- Python `ast` module (AST structural parsing)
+- `tree-sitter` (`tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-java`, `tree-sitter-python`)
+- Multi-tier Sandbox Execution Engine (Native Subprocess + Judge0 CE + Wandbox)
 - SQLAlchemy (SQLite + PostgreSQL with psycopg2)
-- Python `ast` module
-- `tree-sitter` (`tree-sitter-java`, `tree-sitter-cpp`)
-- Secure Sandbox Execution Engine
 
 </td>
 <td valign="top" width="50%">
@@ -60,6 +65,7 @@ Instead of running untrusted code for complexity or guessing Big-O with simple h
 - React 19 + Vite
 - Monaco Editor (`@monaco-editor/react`)
 - Tailwind CSS v4
+- High-contrast accessible themes (Clean Light, VS Code Dark, Obsidian Black)
 - Responsive Dual-Pane Studio Layout
 
 </td>
@@ -77,8 +83,10 @@ Instead of running untrusted code for complexity or guessing Big-O with simple h
 | `POST` | `/run` | Compiles & executes code in sandbox, returns `{ stdout, stderr, execution_time_ms, exit_code }` |
 | `POST` | `/analyze` | Structural AST/Tree-Sitter analysis returning Big-O metrics, explanation & bottlenecks |
 | `GET` | `/history` | Returns all past analyses, newest first |
+| `DELETE`| `/history` | Clears all past analysis history records |
+| `DELETE`| `/history/{id}` | Deletes a single analysis record by ID |
 
-**Supported languages:** `python`, `java`, `cpp`
+**Supported languages:** `python`, `c`, `cpp`, `java`
 
 ---
 
