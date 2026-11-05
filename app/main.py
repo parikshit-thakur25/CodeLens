@@ -1,15 +1,19 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from typing import Optional, List
+import ast
+import os
+
 from app.analyzer import analyze_python_detailed
 from app.analyzer_multilang import analyze_code_multilang_detailed
 from app.runner import execute_code
 from app.database import engine, SessionLocal, Base
-from app.models import Analysis
-import ast
-import os
+from app.models import Analysis, User, UserFile
+from app.auth import hash_password, verify_password, create_token, decode_token
 
+# Automatically create all tables (analyses, users, user_files)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CodeLens Studio API", version="2.0.0")
@@ -47,9 +51,28 @@ def get_db():
         db.close()
 
 
+def get_current_user_optional(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[User]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    payload = decode_token(token)
+    if not payload:
+        return None
+    return db.query(User).filter(User.id == payload.get("uid")).first()
+
+
+def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> User:
+    user = get_current_user_optional(authorization, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required or token expired")
+    return user
+
+
+# --- Health & Info Endpoints ---
+
 @app.get("/")
 def read_root():
-    return {"message": "CodeLens backend is running"}
+    return {"message": "CodeLens Studio backend is running", "version": "2.0.0"}
 
 
 @app.get("/health")
@@ -59,13 +82,185 @@ def health_check():
 
 @app.get("/about")
 def about():
-    return {"project": "CodeLens", "purpose": "AI-powered code complexity analyzer"}
+    return {"project": "CodeLens Studio", "purpose": "Online multi-language compiler & algorithmic complexity diagnostics"}
 
 
-@app.post("/echo")
-def echo_message(data: dict):
-    return {"you_sent": data}
+# --- Auth Models & Routes ---
 
+class UserRegister(BaseModel):
+    username: str = Field(..., min_length=3, max_length=30)
+    email: str = Field(..., min_length=5, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/auth/register")
+def register_user(data: UserRegister, db: Session = Depends(get_db)):
+    clean_username = data.username.strip().lower()
+    clean_email = data.email.strip().lower()
+
+    existing = db.query(User).filter((User.username == clean_username) | (User.email == clean_email)).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username or email is already registered")
+
+    user = User(
+        username=clean_username,
+        email=clean_email,
+        password_hash=hash_password(data.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_token(user.id, user.username)
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+        },
+    }
+
+
+@app.post("/auth/login")
+def login_user(data: UserLogin, db: Session = Depends(get_db)):
+    clean_identifier = data.username.strip().lower()
+    user = db.query(User).filter(
+        (User.username == clean_identifier) | (User.email == clean_identifier)
+    ).first()
+
+    if not user or not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid username or password")
+
+    token = create_token(user.id, user.username)
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+        },
+    }
+
+
+@app.get("/auth/me")
+def get_user_me(user: User = Depends(get_current_user)):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+    }
+
+
+# --- File Management Models & Routes ---
+
+class FileCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    language: str
+    code: str
+
+
+class FileUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+
+
+@app.get("/files")
+def list_user_files(
+    language: Optional[str] = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(UserFile).filter(UserFile.user_id == user.id)
+    if language:
+        query = query.filter(UserFile.language == language.lower())
+    files = query.order_by(UserFile.updated_at.desc()).all()
+    return [
+        {
+            "id": f.id,
+            "name": f.name,
+            "language": f.language,
+            "code": f.code,
+            "created_at": f.created_at,
+            "updated_at": f.updated_at,
+        }
+        for f in files
+    ]
+
+
+@app.post("/files")
+def create_user_file(
+    file_data: FileCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_file = UserFile(
+        user_id=user.id,
+        name=file_data.name.strip(),
+        language=file_data.language.lower(),
+        code=file_data.code,
+    )
+    db.add(user_file)
+    db.commit()
+    db.refresh(user_file)
+    return {
+        "id": user_file.id,
+        "name": user_file.name,
+        "language": user_file.language,
+        "code": user_file.code,
+        "created_at": user_file.created_at,
+        "updated_at": user_file.updated_at,
+    }
+
+
+@app.put("/files/{file_id}")
+def update_user_file(
+    file_id: int,
+    file_data: FileUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_file = db.query(UserFile).filter(UserFile.id == file_id, UserFile.user_id == user.id).first()
+    if not user_file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file_data.name is not None:
+        user_file.name = file_data.name.strip()
+    if file_data.code is not None:
+        user_file.code = file_data.code
+
+    db.commit()
+    db.refresh(user_file)
+    return {
+        "id": user_file.id,
+        "name": user_file.name,
+        "language": user_file.language,
+        "code": user_file.code,
+        "updated_at": user_file.updated_at,
+    }
+
+
+@app.delete("/files/{file_id}")
+def delete_user_file(
+    file_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_file = db.query(UserFile).filter(UserFile.id == file_id, UserFile.user_id == user.id).first()
+    if not user_file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    db.delete(user_file)
+    db.commit()
+    return {"message": "File deleted successfully"}
+
+
+# --- Code Analysis & Execution ---
 
 class CodeSubmission(BaseModel):
     code: str = Field(..., max_length=100000)
@@ -95,8 +290,8 @@ def analyze_code(submission: CodeSubmission, db: Session = Depends(get_db)):
             )
         except SyntaxError as e:
             raise HTTPException(status_code=400, detail=f"Python Syntax Error (Line {e.lineno}): {e.msg}")
-    elif language in ("java", "cpp", "c++"):
-        lang_key = "cpp" if language in ("cpp", "c++") else "java"
+    elif language in ("java", "cpp", "c++", "c"):
+        lang_key = "java" if language == "java" else ("c" if language == "c" else "cpp")
         try:
             time_complexity, space_complexity, explanation, bottlenecks = analyze_code_multilang_detailed(
                 submission.code, lang_key
@@ -132,10 +327,8 @@ def run_code_endpoint(submission: RunSubmission):
         raise HTTPException(status_code=400, detail="Code cannot be empty")
 
     language = submission.language.lower()
-    if language in ("cpp", "c++"):
-        lang_key = "cpp"
-    elif language in ("java", "python"):
-        lang_key = language
+    if language in ("c", "cpp", "c++", "java", "python"):
+        lang_key = "c" if language == "c" else ("cpp" if language in ("cpp", "c++") else language)
     else:
         raise HTTPException(status_code=400, detail=f"Language '{language}' execution is not supported")
 

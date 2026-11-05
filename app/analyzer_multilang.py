@@ -24,6 +24,14 @@ LANGUAGE_CONFIG = {
         "call_name_field": "function",
         "new_object_types": {"new_expression"},
     },
+    "c": {
+        "language": CPP_LANGUAGE,
+        "loop_types": {"for_statement", "while_statement", "do_statement"},
+        "function_types": {"function_definition"},
+        "call_type": "call_expression",
+        "call_name_field": "function",
+        "new_object_types": {"call_expression"},
+    },
 }
 
 

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 # Supported compiler mappings on Wandbox
 COMPILER_MAPPING = {
     "python": "cpython-3.12.7",
+    "c": "gcc-13.2.0",
     "cpp": "gcc-13.2.0",
     "c++": "gcc-13.2.0",
     "java": "openjdk-jdk-21+35",
