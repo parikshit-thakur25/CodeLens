@@ -8,6 +8,12 @@ const LANGUAGES = [
   { value: 'java', label: 'Java 21', monaco: 'java', ext: 'Main.java', version: 'v21', badge: '☕' },
 ]
 
+const THEMES = [
+  { value: 'vscode-dark', label: 'VS Code Dark', monacoTheme: 'vs-dark', bg: 'bg-[#1e1e1e]', surface: 'bg-[#252526]', border: 'border-[#3c3c3c]', text: 'text-[#cccccc]', headerBg: 'bg-[#323233]' },
+  { value: 'obsidian', label: 'Obsidian Black', monacoTheme: 'vs-dark', bg: 'bg-[#0d1117]', surface: 'bg-[#161b22]', border: 'border-[#30363d]', text: 'text-slate-200', headerBg: 'bg-[#161b22]' },
+  { value: 'light', label: 'Clean Light', monacoTheme: 'vs', bg: 'bg-[#f8fafc]', surface: 'bg-white', border: 'border-slate-200', text: 'text-slate-800', headerBg: 'bg-slate-100' },
+]
+
 const DEFAULT_CODE = {
   python: `def binary_search(arr, target):
     """
@@ -56,7 +62,7 @@ int main() {
     int size = sizeof(dataset) / sizeof(dataset[0]);
     int target = 38;
     int idx = binarySearch(dataset, size, target);
-    printf("Dataset elements: %d\\n", size);
+    printf("Dataset size: %d\\n", size);
     printf("Target %d located at index: %d\\n", target, idx);
     return 0;
 }
@@ -136,6 +142,11 @@ export default function App() {
   const [stdin, setStdin] = useState('')
   const [showStdin, setShowStdin] = useState(false)
 
+  // Dropdown States
+  const [showLangDropdown, setShowLangDropdown] = useState(false)
+  const [showThemeDropdown, setShowThemeDropdown] = useState(false)
+  const [currentTheme, setCurrentTheme] = useState('vscode-dark')
+
   // Status & Results
   const [analysisResult, setAnalysisResult] = useState(null)
   const [runResult, setRunResult] = useState(null)
@@ -153,7 +164,7 @@ export default function App() {
   const [token, setToken] = useState(localStorage.getItem('codelens_token') || '')
   const [user, setUser] = useState(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authMode, setAuthMode] = useState('login') // 'login' | 'register'
+  const [authMode, setAuthMode] = useState('login')
   const [authUsername, setAuthUsername] = useState('')
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
@@ -163,7 +174,7 @@ export default function App() {
   // File Workspace State
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [workspaceFiles, setWorkspaceFiles] = useState([])
-  const [workspaceLang, setWorkspaceLang] = useState('all') // 'all' | 'python' | 'c' | 'cpp' | 'java'
+  const [workspaceLang, setWorkspaceLang] = useState('all')
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [saveFileName, setSaveFileName] = useState('')
 
@@ -173,6 +184,16 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false)
 
   const editorRef = useRef(null)
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const closeDropdowns = () => {
+      setShowLangDropdown(false)
+      setShowThemeDropdown(false)
+    }
+    window.addEventListener('click', closeDropdowns)
+    return () => window.removeEventListener('click', closeDropdowns)
+  }, [])
 
   // Check Auth Session on mount
   useEffect(() => {
@@ -191,7 +212,6 @@ export default function App() {
         })
         .catch(() => {})
     } else {
-      // Load local guest files
       const local = localStorage.getItem('codelens_guest_files')
       if (local) {
         try {
@@ -200,35 +220,6 @@ export default function App() {
       }
     }
   }, [token])
-
-  // Custom Monaco dark theme
-  const handleEditorWillMount = (monaco) => {
-    monaco.editor.defineTheme('codelens-studio-theme', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: 'comment', foreground: '6272a4', fontStyle: 'italic' },
-        { token: 'keyword', foreground: '38bdf8', fontStyle: 'bold' },
-        { token: 'string', foreground: '34d399' },
-        { token: 'number', foreground: 'fbbf24' },
-        { token: 'type', foreground: 'a78bfa' },
-        { token: 'function', foreground: '818cf8' },
-        { token: 'delimiter', foreground: '94a3b8' },
-      ],
-      colors: {
-        'editor.background': '#0a0c12',
-        'editor.foreground': '#e2e8f0',
-        'editorCursor.foreground': '#10b981',
-        'editor.lineHighlightBackground': '#121520',
-        'editorLineNumber.foreground': '#334155',
-        'editorLineNumber.activeForeground': '#94a3b8',
-        'editor.selectionBackground': '#1e293b',
-        'editor.inactiveSelectionBackground': '#182030',
-        'editorIndentGuide.background': '#1e293b',
-        'editorIndentGuide.activeBackground': '#334155',
-      },
-    })
-  }
 
   const handleEditorDidMount = (editor) => {
     editorRef.current = editor
@@ -248,6 +239,7 @@ export default function App() {
     setAnalysisResult(null)
     setRunResult(null)
     setError('')
+    setShowLangDropdown(false)
   }
 
   const jumpToLine = (lineNumber) => {
@@ -263,7 +255,6 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Download code to user's computer
   const handleDownloadFile = () => {
     const blob = new Blob([code], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -305,7 +296,7 @@ export default function App() {
         loadUserFiles(data.token)
       }
     } catch (_) {
-      setAuthError('Could not connect to authentication server.')
+      setAuthError('Could not reach auth service.')
     } finally {
       setAuthLoading(false)
     }
@@ -315,7 +306,6 @@ export default function App() {
     localStorage.removeItem('codelens_token')
     setToken('')
     setUser(null)
-    // Reload local files
     const local = localStorage.getItem('codelens_guest_files')
     if (local) {
       try {
@@ -349,7 +339,6 @@ export default function App() {
     const name = saveFileName.trim()
 
     if (token) {
-      // Cloud Save to PostgreSQL
       try {
         const res = await fetch(`${API_URL}/files`, {
           method: 'POST',
@@ -366,10 +355,9 @@ export default function App() {
           setSaveModalOpen(false)
         }
       } catch (_) {
-        setError('Failed to sync file to cloud.')
+        setError('Failed to sync file.')
       }
     } else {
-      // Local Save to Browser Storage
       const newFile = {
         id: Date.now(),
         name,
@@ -408,6 +396,42 @@ export default function App() {
     if (!token) {
       localStorage.setItem('codelens_guest_files', JSON.stringify(filtered))
     }
+  }
+
+  // --- History Handlers with Delete Support ---
+  const handleToggleHistory = async () => {
+    if (showHistory) {
+      setShowHistory(false)
+      return
+    }
+
+    setHistoryLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/history`)
+      const data = await response.json()
+      setHistory(data)
+      setShowHistory(true)
+    } catch (_) {
+      setError('Could not retrieve past records.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleClearAllHistory = async () => {
+    if (!confirm('Clear all analysis history records?')) return
+    try {
+      await fetch(`${API_URL}/history`, { method: 'DELETE' })
+      setHistory([])
+    } catch (_) {}
+  }
+
+  const handleDeleteHistoryItem = async (recordId, e) => {
+    e.stopPropagation()
+    try {
+      await fetch(`${API_URL}/history/${recordId}`, { method: 'DELETE' })
+      setHistory(history.filter((h) => h.id !== recordId))
+    } catch (_) {}
   }
 
   // --- Execution & Analysis ---
@@ -461,7 +485,7 @@ export default function App() {
     }
   }
 
-  // Keyboard Shortcuts: Cmd+Enter (Run), Cmd+Shift+Enter (Analyze)
+  // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -477,26 +501,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [code, language, stdin])
 
-  const handleToggleHistory = async () => {
-    if (showHistory) {
-      setShowHistory(false)
-      return
-    }
-
-    setHistoryLoading(true)
-    try {
-      const response = await fetch(`${API_URL}/history`)
-      const data = await response.json()
-      setHistory(data)
-      setShowHistory(true)
-    } catch (_) {
-      setError('Could not retrieve past records.')
-    } finally {
-      setHistoryLoading(false)
-    }
-  }
-
   const currentLangConfig = LANGUAGES.find((l) => l.value === language) || LANGUAGES[0]
+  const themeConfig = THEMES.find((t) => t.value === currentTheme) || THEMES[0]
 
   const getSpectrumIndex = (complexityStr) => {
     if (!complexityStr) return -1
@@ -514,110 +520,182 @@ export default function App() {
     ? getSpectrumIndex(analysisResult.estimated_time_complexity)
     : -1
 
-  // Filtered files in workspace
   const filteredWorkspaceFiles = workspaceLang === 'all'
     ? workspaceFiles
     : workspaceFiles.filter((f) => f.language === workspaceLang)
 
-  return (
-    <div className="min-h-screen bg-[#08090D] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-300 ambient-grid relative">
-      {/* Ambient background glows */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/3 right-10 w-[450px] h-[450px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+  const isLight = currentTheme === 'light'
 
-      {/* Top Navbar */}
-      <header className="border-b border-white/[0.06] bg-[#0A0C14]/80 backdrop-blur-xl px-4 lg:px-6 py-2.5 sticky top-0 z-30 flex items-center justify-between gap-3">
-        {/* Brand identity & Workspace Toggle */}
+  return (
+    <div className={`min-h-screen ${themeConfig.bg} ${themeConfig.text} flex flex-col font-sans transition-colors duration-200 select-none`}>
+      {/* Top Navbar — Professional VS Code / Linear Aesthetic */}
+      <header className={`border-b ${themeConfig.border} ${themeConfig.headerBg} px-4 py-2 sticky top-0 z-30 flex items-center justify-between gap-3 text-xs`}>
+        {/* Left: Clean, Minimalist Typography Logo & Workspace */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowWorkspace(true)}
-            className="p-2 rounded-xl bg-[#0F121C] hover:bg-slate-800 text-slate-300 hover:text-white border border-white/[0.08] transition flex items-center gap-2 cursor-pointer shadow-sm"
-            title="Open Files Workspace"
+            className={`p-1.5 px-2.5 rounded border ${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 transition flex items-center gap-1.5 cursor-pointer text-xs`}
+            title="Open Files Explorer"
           >
             <span>📁</span>
-            <span className="text-xs font-semibold hidden md:inline">Files ({workspaceFiles.length})</span>
+            <span className="font-medium hidden sm:inline">Files</span>
+            {workspaceFiles.length > 0 && (
+              <span className="font-mono text-[10px] opacity-60">({workspaceFiles.length})</span>
+            )}
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold tracking-tight text-white">
-              Code<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Lens</span>
-            </span>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 tracking-wider uppercase font-mono">
-              Studio
+            <span className="font-semibold text-sm tracking-tight flex items-center gap-1.5">
+              <span className="font-mono text-zinc-400 font-normal">λ</span>
+              <span className={isLight ? 'text-slate-900 font-bold' : 'text-zinc-100 font-bold'}>CodeLens</span>
+              <span className="text-zinc-500 font-normal text-xs">studio</span>
             </span>
           </div>
         </div>
 
-        {/* Center: Language Switcher Tabs (Python, C, C++, Java) */}
-        <div className="bg-[#0F121C]/90 p-1 rounded-xl border border-white/[0.08] shadow-inner flex items-center gap-1 overflow-x-auto">
-          {LANGUAGES.map((l) => (
+        {/* Center: Language & Theme Vertical Dropdowns */}
+        <div className="flex items-center gap-2">
+          {/* Vertical Language Dropdown */}
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
             <button
-              key={l.value}
-              onClick={() => handleLanguageChange(l.value)}
-              className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded-lg transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
-                language === l.value
-                  ? 'bg-gradient-to-b from-slate-800 to-slate-850 text-white shadow-md border border-white/10 font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
-              }`}
+              onClick={() => {
+                setShowLangDropdown(!showLangDropdown)
+                setShowThemeDropdown(false)
+              }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded border ${themeConfig.border} ${isLight ? 'bg-white hover:bg-slate-50 text-slate-800' : 'bg-[#1e1e1e] hover:bg-[#2d2d2d] text-zinc-200'} transition cursor-pointer text-xs font-medium`}
             >
-              <span>{l.badge}</span>
-              <span className="hidden sm:inline">{l.label}</span>
-              <span className="sm:hidden">{l.value.toUpperCase()}</span>
+              <span>{currentLangConfig.badge}</span>
+              <span>{currentLangConfig.label}</span>
+              <span className="text-[10px] opacity-60">▾</span>
             </button>
-          ))}
+
+            {showLangDropdown && (
+              <div className={`absolute top-full mt-1 left-0 w-44 rounded-md shadow-xl border ${themeConfig.border} ${isLight ? 'bg-white' : 'bg-[#252526]'} py-1 z-50 animate-fade-in`}>
+                <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 border-b border-inherit">
+                  Select Language
+                </div>
+                {LANGUAGES.map((l) => (
+                  <button
+                    key={l.value}
+                    onClick={() => handleLanguageChange(l.value)}
+                    className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between transition cursor-pointer ${
+                      language === l.value
+                        ? 'bg-blue-600 text-white font-medium'
+                        : isLight ? 'text-slate-700 hover:bg-slate-100' : 'text-zinc-300 hover:bg-[#2a2d2e]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{l.badge}</span>
+                      <span>{l.label}</span>
+                    </span>
+                    <span className={`text-[10px] font-mono ${language === l.value ? 'text-blue-100' : 'text-zinc-500'}`}>
+                      {l.version}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Vertical Theme / Background Dropdown */}
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                setShowThemeDropdown(!showThemeDropdown)
+                setShowLangDropdown(false)
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border ${themeConfig.border} ${isLight ? 'bg-white hover:bg-slate-50 text-slate-700' : 'bg-[#1e1e1e] hover:bg-[#2d2d2d] text-zinc-300'} transition cursor-pointer text-xs`}
+              title="Change Editor Theme & Background"
+            >
+              <span>🎨</span>
+              <span className="hidden md:inline">{themeConfig.label}</span>
+              <span className="text-[10px] opacity-60">▾</span>
+            </button>
+
+            {showThemeDropdown && (
+              <div className={`absolute top-full mt-1 right-0 w-40 rounded-md shadow-xl border ${themeConfig.border} ${isLight ? 'bg-white' : 'bg-[#252526]'} py-1 z-50 animate-fade-in`}>
+                <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 border-b border-inherit">
+                  Editor Theme
+                </div>
+                {THEMES.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => {
+                      setCurrentTheme(t.value)
+                      setShowThemeDropdown(false)
+                    }}
+                    className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between transition cursor-pointer ${
+                      currentTheme === t.value
+                        ? 'bg-blue-600 text-white font-medium'
+                        : isLight ? 'text-slate-700 hover:bg-slate-100' : 'text-zinc-300 hover:bg-[#2a2d2e]'
+                    }`}
+                  >
+                    <span>{t.label}</span>
+                    {currentTheme === t.value && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right Action Toolbar & User Session */}
+        {/* Right: Restrained, Professional Action Buttons & Sign In */}
         <div className="flex items-center gap-2">
-          {/* Run Button */}
+          {/* Professional Run Button (No loud clown colors) */}
           <button
             onClick={handleRun}
             disabled={running || analyzing}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-semibold text-xs transition shadow-lg shadow-emerald-500/20 disabled:opacity-40 cursor-pointer"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border font-medium text-xs transition cursor-pointer ${
+              isLight
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'
+                : 'bg-[#2d2d2d] hover:bg-[#383838] text-emerald-400 border-[#3c3c3c] hover:border-emerald-500/40'
+            } disabled:opacity-40`}
           >
             {running ? (
-              <svg className="animate-spin h-3.5 w-3.5 text-slate-950" viewBox="0 0 24 24">
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <span>▶</span>
+              <span className="text-[11px]">▶</span>
             )}
-            <span className="hidden sm:inline">Run</span>
-            <kbd className="hidden md:inline-block px-1 text-[9px] font-mono bg-emerald-950/20 text-slate-900 rounded border border-emerald-900/30">
-              ⌘↵
-            </kbd>
+            <span>Run</span>
+            <kbd className="hidden md:inline-block px-1 text-[9px] font-mono opacity-60">⌘↵</kbd>
           </button>
 
-          {/* Analyze Complexity Button */}
+          {/* Professional Analyze Button */}
           <button
             onClick={handleAnalyze}
             disabled={running || analyzing}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs transition shadow-lg shadow-indigo-600/20 disabled:opacity-40 cursor-pointer"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border font-medium text-xs transition cursor-pointer ${
+              isLight
+                ? 'bg-slate-800 hover:bg-slate-900 text-white border-slate-900'
+                : 'bg-[#2d2d2d] hover:bg-[#383838] text-zinc-100 border-[#3c3c3c] hover:border-zinc-500'
+            } disabled:opacity-40`}
           >
             {analyzing ? (
-              <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24">
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <span>⚡</span>
+              <span className="text-amber-400 text-xs">⚡</span>
             )}
-            <span className="hidden sm:inline">Analyze</span>
+            <span>Analyze</span>
           </button>
 
-          {/* User Profile / Login Button */}
+          {/* Clean VS Code style Sign In / Account button (No bulky box) */}
           {user ? (
-            <div className="flex items-center gap-2 pl-1 border-l border-white/10">
+            <div className="flex items-center gap-2 pl-2 border-l border-zinc-700/40">
               <div
-                className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center uppercase shadow"
-                title={`Signed in as ${user.username}`}
+                className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center uppercase shadow"
+                title={`Logged in as ${user.username}`}
               >
                 {user.username.charAt(0)}
               </div>
               <button
                 onClick={handleLogout}
-                className="text-xs text-slate-400 hover:text-rose-400 transition hidden sm:inline"
+                className="text-[11px] text-zinc-400 hover:text-rose-400 transition"
                 title="Sign Out"
               >
                 Exit
@@ -629,7 +707,8 @@ export default function App() {
                 setAuthMode('login')
                 setShowAuthModal(true)
               }}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 text-xs font-semibold border border-white/10 transition cursor-pointer flex items-center gap-1.5"
+              className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer hover:bg-white/5 rounded"
+              title="Sign In with Account"
             >
               <span>👤</span>
               <span className="hidden sm:inline">Sign In</span>
@@ -640,7 +719,7 @@ export default function App() {
           <button
             onClick={handleToggleHistory}
             disabled={historyLoading}
-            className="p-1.5 rounded-xl bg-[#0F121C] hover:bg-slate-800 text-slate-400 hover:text-white border border-white/[0.08] transition text-sm cursor-pointer"
+            className={`p-1.5 rounded border ${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 text-zinc-400 hover:text-zinc-200 transition cursor-pointer text-xs`}
             title="Analysis History"
           >
             📜
@@ -649,62 +728,60 @@ export default function App() {
       </header>
 
       {/* Main Studio Viewport */}
-      <main className="flex-1 p-3 lg:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 max-w-[1780px] w-full mx-auto">
+      <main className="flex-1 p-2 lg:p-3 grid grid-cols-1 lg:grid-cols-12 gap-2 max-w-[1900px] w-full mx-auto">
         {/* Left Column: Editor Studio (7 cols) */}
-        <section className="lg:col-span-7 flex flex-col rounded-2xl border border-white/[0.08] bg-[#0A0C14]/90 backdrop-blur-2xl overflow-hidden shadow-2xl">
-          {/* File Tab Header with Save & Download */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] bg-[#0D101A] text-xs">
+        <section className={`lg:col-span-7 flex flex-col rounded-lg border ${themeConfig.border} ${themeConfig.surface} overflow-hidden shadow-sm`}>
+          {/* File Tab Header with Save & Export */}
+          <div className={`flex items-center justify-between px-3 py-1.5 border-b ${themeConfig.border} ${themeConfig.headerBg} text-xs`}>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#08090D] border border-white/10 text-slate-200 font-mono text-xs shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <div className={`flex items-center gap-2 px-2.5 py-0.5 rounded ${themeConfig.bg} border ${themeConfig.border} font-mono text-xs shadow-xs`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span>{currentFileName}</span>
               </div>
 
-              {/* Save File Button */}
               <button
                 onClick={handleOpenSaveModal}
-                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-medium text-xs transition flex items-center gap-1 cursor-pointer"
+                className="px-2 py-0.5 rounded hover:bg-white/5 border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px] flex items-center gap-1 cursor-pointer"
                 title="Save file to workspace"
               >
                 <span>💾</span>
-                <span className="hidden sm:inline">Save</span>
+                <span>Save</span>
               </button>
 
-              {/* Download File Button */}
               <button
                 onClick={handleDownloadFile}
-                className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/10 font-medium text-xs transition flex items-center gap-1 cursor-pointer"
+                className="px-2 py-0.5 rounded hover:bg-white/5 border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px] flex items-center gap-1 cursor-pointer"
                 title="Download file to computer"
               >
                 <span>📥</span>
-                <span className="hidden sm:inline">Export</span>
+                <span>Export</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowStdin(!showStdin)}
-                className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition flex items-center gap-1.5 border ${
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition flex items-center gap-1 border ${
                   showStdin
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:text-slate-200'
+                    ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
                 }`}
               >
                 <span>STDIN</span>
-                {stdin.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                {stdin.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
               </button>
 
               <button
                 onClick={handleCopyCode}
-                className="p-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] text-slate-400 hover:text-slate-200 border border-white/[0.06] transition text-xs"
+                className="px-2 py-0.5 rounded border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px]"
                 title="Copy Code"
               >
-                {copied ? <span className="text-emerald-400">✓</span> : <span>Copy</span>}
+                {copied ? <span className="text-emerald-400">✓ Copied</span> : <span>Copy</span>}
               </button>
 
               <button
                 onClick={() => setCode(DEFAULT_CODE[language])}
-                className="px-2 py-1 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] text-slate-400 hover:text-slate-200 border border-white/[0.06] transition text-xs"
+                className="px-2 py-0.5 rounded border border-transparent hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition text-[11px]"
                 title="Reset to boilerplate"
               >
                 Reset
@@ -714,101 +791,95 @@ export default function App() {
 
           {/* Optional Stdin Drawer */}
           {showStdin && (
-            <div className="p-3 bg-[#08090E] border-b border-white/[0.06]">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
-                  Standard Input (passed to program via stdin)
+            <div className={`p-2.5 border-b ${themeConfig.border} ${themeConfig.bg}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-semibold">
+                  Standard Input (stdin stream)
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">{stdin.length} bytes</span>
+                <span className="text-[10px] text-zinc-500 font-mono">{stdin.length} bytes</span>
               </div>
               <textarea
                 value={stdin}
                 onChange={(e) => setStdin(e.target.value)}
-                placeholder="Enter input parameters here (e.g., lines for input() or scanf)..."
+                placeholder="Pass standard input parameters here (e.g. for input() or scanf)..."
                 rows={2}
-                className="w-full bg-[#0D101A] border border-white/10 rounded-xl p-2.5 font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 resize-y"
+                className={`w-full ${themeConfig.surface} border ${themeConfig.border} rounded p-2 font-mono text-xs focus:outline-none focus:border-blue-500 resize-y`}
               />
             </div>
           )}
 
           {/* Monaco Editor Container */}
-          <div className="flex-1 min-h-[460px] lg:min-h-[560px]">
+          <div className="flex-1 min-h-[480px] lg:min-h-[580px]">
             <Editor
               height="100%"
               language={currentLangConfig.monaco}
               value={code}
               onChange={(value) => setCode(value || '')}
-              beforeMount={handleEditorWillMount}
               onMount={handleEditorDidMount}
-              theme="codelens-studio-theme"
+              theme={themeConfig.monacoTheme}
               options={{
-                fontSize: 13.5,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', Consolas, Menlo, monospace",
                 fontLigatures: true,
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
                 lineNumbers: 'on',
-                lineHeight: 22,
+                lineHeight: 20,
                 smoothScrolling: true,
                 cursorBlinking: 'smooth',
-                cursorSmoothCaretAnimation: 'on',
-                padding: { top: 12, bottom: 12 },
+                padding: { top: 8, bottom: 8 },
                 renderLineHighlight: 'all',
               }}
             />
           </div>
 
-          {/* Editor Status Bar */}
-          <div className="px-4 py-2 border-t border-white/[0.06] bg-[#0D101A] flex items-center justify-between text-[11px] font-mono text-slate-500">
+          {/* Editor Status Bar — VS Code Style */}
+          <div className={`px-3 py-1 border-t ${themeConfig.border} ${themeConfig.headerBg} flex items-center justify-between text-[11px] font-mono text-zinc-400`}>
             <div className="flex items-center gap-3">
               <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
               <span>•</span>
               <span>UTF-8</span>
               <span>•</span>
-              <span>{user ? `Cloud Sync: @${user.username}` : 'Local Draft Mode'}</span>
+              <span>{user ? `Account: ${user.username}` : 'Local Draft'}</span>
             </div>
 
             <div className="flex items-center gap-3">
               <span>{code.length} chars</span>
               <span>•</span>
-              <span className="text-slate-400">{currentLangConfig.label} Environment</span>
+              <span>{currentLangConfig.label}</span>
             </div>
           </div>
         </section>
 
         {/* Right Column: Console & Diagnostics HUD (5 cols) */}
-        <section className="lg:col-span-5 flex flex-col rounded-2xl border border-white/[0.08] bg-[#0A0C14]/90 backdrop-blur-2xl overflow-hidden shadow-2xl">
+        <section className={`lg:col-span-5 flex flex-col rounded-lg border ${themeConfig.border} ${themeConfig.surface} overflow-hidden shadow-sm`}>
           {/* Header Tab Bar */}
-          <div className="flex items-center justify-between border-b border-white/[0.06] bg-[#0D101A] px-3 py-2">
-            <div className="flex items-center gap-1.5">
+          <div className={`flex items-center justify-between border-b ${themeConfig.border} ${themeConfig.headerBg} px-2 py-1`}>
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setActiveTab('console')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
                   activeTab === 'console'
-                    ? 'bg-slate-800 text-emerald-400 font-semibold shadow-sm border border-white/10'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? `${themeConfig.bg} font-semibold shadow-xs border ${themeConfig.border}`
+                    : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <span>🖥️</span> Terminal
+                <span>Terminal Output</span>
                 {runResult && (
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      runResult.success ? 'bg-emerald-400' : 'bg-rose-400'
-                    }`}
-                  />
+                  <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                 )}
               </button>
 
               <button
                 onClick={() => setActiveTab('diagnostics')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
                   activeTab === 'diagnostics'
-                    ? 'bg-slate-800 text-indigo-400 font-semibold shadow-sm border border-white/10'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? `${themeConfig.bg} font-semibold shadow-xs border ${themeConfig.border}`
+                    : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <span>⚡</span> Complexity HUD
-                {analysisResult && <span className="w-2 h-2 rounded-full bg-indigo-400" />}
+                <span>Complexity Diagnostics</span>
+                {analysisResult && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-indigo-400" />}
               </button>
             </div>
 
@@ -818,7 +889,7 @@ export default function App() {
                 setAnalysisResult(null)
                 setError('')
               }}
-              className="text-[11px] font-mono text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-white/[0.04] transition"
+              className="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded hover:bg-white/5 transition"
             >
               Clear
             </button>
@@ -826,50 +897,37 @@ export default function App() {
 
           {/* Error Banner */}
           {error && (
-            <div className="m-3 p-3 rounded-xl bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs flex items-start gap-2">
-              <span className="text-sm">⚠️</span>
+            <div className="m-2 p-2 rounded bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs flex items-start gap-2">
+              <span>⚠️</span>
               <p className="flex-1 font-mono">{error}</p>
             </div>
           )}
 
           {/* Panel Viewport */}
-          <div className="flex-1 p-4 overflow-y-auto">
+          <div className="flex-1 p-3 overflow-y-auto">
             {/* Terminal Tab */}
             {activeTab === 'console' && (
               <div className="flex flex-col h-full font-mono text-xs">
-                {/* Terminal Window Header */}
-                <div className="flex items-center justify-between text-slate-400 mb-2 pb-2 border-b border-white/[0.06]">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/70 inline-block" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70 inline-block" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70 inline-block" />
-                    </div>
-                    <span className="text-[11px] text-slate-500">stdio stream</span>
-                  </div>
+                <div className={`flex items-center justify-between text-zinc-400 mb-2 pb-1.5 border-b ${themeConfig.border}`}>
+                  <span className="text-[11px] text-zinc-500 font-mono">Terminal Output</span>
 
                   {runResult && (
                     <div className="flex items-center gap-2 text-[11px]">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          runResult.success
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                        }`}
-                      >
-                        Exit Code {runResult.exit_code || (runResult.success ? 0 : 1)}
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        runResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        Exit {runResult.exit_code || (runResult.success ? 0 : 1)}
                       </span>
-                      <span className="text-slate-400">⚡ {runResult.execution_time_ms} ms</span>
+                      <span>{runResult.execution_time_ms} ms</span>
                     </div>
                   )}
                 </div>
 
-                {/* Terminal Canvas */}
-                <div className="flex-1 bg-[#06070B] rounded-xl p-4 border border-white/[0.06] overflow-auto min-h-[380px] shadow-inner font-mono text-[12.5px]">
+                <div className={`flex-1 ${isLight ? 'bg-slate-50' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[400px] font-mono text-xs`}>
                   {running ? (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-3 py-16">
-                      <div className="w-8 h-8 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
-                      <p className="text-xs text-slate-400">Compiling and running in sandbox...</p>
+                    <div className="flex items-center justify-center h-full text-zinc-400 gap-2 py-16">
+                      <div className="w-4 h-4 rounded-full border-2 border-zinc-600 border-t-zinc-200 animate-spin" />
+                      <span>Executing in sandbox...</span>
                     </div>
                   ) : runResult ? (
                     <div className="space-y-1">
@@ -879,22 +937,19 @@ export default function App() {
                         </pre>
                       )}
                       {runResult.stderr && (
-                        <pre className="text-rose-400 whitespace-pre-wrap leading-relaxed mt-2 p-2.5 rounded-lg bg-rose-950/20 border border-rose-900/40">
+                        <pre className="text-rose-400 whitespace-pre-wrap leading-relaxed mt-2 p-2 rounded bg-rose-950/20 border border-rose-900/40">
                           {runResult.stderr}
                         </pre>
                       )}
                       {!runResult.stdout && !runResult.stderr && (
-                        <p className="text-slate-500 italic">Program finished successfully with no output.</p>
+                        <p className="text-zinc-500 italic">Program finished with no output.</p>
                       )}
                     </div>
                   ) : (
-                    <div className="text-slate-600 flex flex-col items-center justify-center h-full py-20 gap-2 text-center">
-                      <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-center text-slate-500 text-lg mb-1">
-                        &gt;_
-                      </div>
-                      <p className="text-xs text-slate-400 font-sans font-medium">Terminal Ready</p>
-                      <p className="text-[11px] text-slate-600 font-sans max-w-xs">
-                        Supports Python 3, C, C++ 20, and Java 21 execution.
+                    <div className="text-zinc-500 flex flex-col items-center justify-center h-full py-20 gap-1 text-center">
+                      <p className="font-mono text-xs">Terminal ready</p>
+                      <p className="text-[11px] text-zinc-500">
+                        Press Run or ⌘+Enter to execute code.
                       </p>
                     </div>
                   )}
@@ -904,37 +959,34 @@ export default function App() {
 
             {/* Diagnostics HUD Tab */}
             {activeTab === 'diagnostics' && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {analyzing ? (
-                  <div className="flex flex-col items-center justify-center min-h-[380px] text-slate-500 gap-3">
-                    <div className="w-8 h-8 rounded-full border-2 border-indigo-500/20 border-t-indigo-400 animate-spin" />
-                    <p className="text-xs text-slate-400">Inspecting syntax tree & loop depth...</p>
+                  <div className="flex items-center justify-center min-h-[380px] text-zinc-400 gap-2">
+                    <div className="w-4 h-4 rounded-full border-2 border-zinc-600 border-t-zinc-200 animate-spin" />
+                    <span>Analyzing code structure...</span>
                   </div>
                 ) : analysisResult ? (
                   <>
-                    {/* Visual Big-O Spectrum Radar */}
-                    <div className="p-3.5 rounded-xl border border-white/[0.06] bg-[#06070B]">
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2 font-mono">
-                        <span>ALGORITHMIC COMPLEXITY SPECTRUM</span>
-                        <span className="text-emerald-400">Optimal ➔ High</span>
+                    {/* Big-O Spectrum Radar */}
+                    <div className={`p-2.5 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-1.5 font-mono">
+                        <span>COMPLEXITY RATING</span>
+                        <span>O(1) ➔ O(2^n)</span>
                       </div>
 
-                      <div className="grid grid-cols-6 gap-1.5">
+                      <div className="grid grid-cols-6 gap-1">
                         {COMPLEXITY_SPECTRUM.map((item, idx) => {
                           const isActive = idx === activeSpectrumIdx
                           return (
                             <div
                               key={item.label}
-                              className={`p-2 rounded-lg text-center transition-all duration-300 border ${
+                              className={`p-1.5 rounded text-center border transition ${
                                 isActive
-                                  ? 'bg-gradient-to-b from-indigo-500/20 to-purple-500/20 border-indigo-400/50 shadow-lg shadow-indigo-500/10'
-                                  : 'bg-white/[0.02] border-white/[0.04] opacity-50'
+                                  ? 'bg-blue-600/20 border-blue-500 text-white font-semibold'
+                                  : 'border-transparent text-zinc-500 opacity-60'
                               }`}
                             >
-                              <p className={`font-mono text-xs font-bold ${isActive ? 'text-white' : 'text-slate-400'}`}>
-                                {item.label}
-                              </p>
-                              <p className="text-[9px] text-slate-500 truncate mt-0.5">{item.name}</p>
+                              <p className="font-mono text-[11px]">{item.label}</p>
                             </div>
                           )
                         })}
@@ -942,37 +994,33 @@ export default function App() {
                     </div>
 
                     {/* Dual Metric Cards */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-4 rounded-xl border border-white/[0.06] bg-[#06070B] relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none" />
-                        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 block">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className={`p-3 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
+                        <span className="text-[10px] uppercase font-mono text-zinc-500 font-semibold block">
                           Time Complexity
                         </span>
-                        <p className="mt-2 text-2xl font-black font-mono text-emerald-400">
+                        <p className="mt-1 text-xl font-bold font-mono text-emerald-400">
                           {analysisResult.estimated_time_complexity}
                         </p>
-                        <span className="text-[11px] text-slate-400 mt-1 block">Worst-Case Scaling</span>
                       </div>
 
-                      <div className="p-4 rounded-xl border border-white/[0.06] bg-[#06070B] relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
-                        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500 block">
+                      <div className={`p-3 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
+                        <span className="text-[10px] uppercase font-mono text-zinc-500 font-semibold block">
                           Auxiliary Space
                         </span>
-                        <p className="mt-2 text-2xl font-black font-mono text-indigo-400">
+                        <p className="mt-1 text-xl font-bold font-mono text-indigo-400">
                           {analysisResult.estimated_space_complexity}
                         </p>
-                        <span className="text-[11px] text-slate-400 mt-1 block">Memory Footprint</span>
                       </div>
                     </div>
 
                     {/* Reasoning Breakdown */}
                     {analysisResult.explanation && (
-                      <div className="p-4 rounded-xl border border-white/[0.06] bg-[#06070B]">
-                        <p className="text-xs font-semibold text-slate-200 mb-1.5 flex items-center gap-1.5">
+                      <div className={`p-3 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'}`}>
+                        <p className="text-xs font-semibold mb-1 flex items-center gap-1.5 text-zinc-300">
                           <span>💡</span> Diagnostic Breakdown
                         </p>
-                        <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
                           {analysisResult.explanation}
                         </p>
                       </div>
@@ -981,26 +1029,26 @@ export default function App() {
                     {/* Bottlenecks List */}
                     {analysisResult.bottlenecks && analysisResult.bottlenecks.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold mb-2">
-                          Critical Loops & Recurrences
+                        <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">
+                          Detected Loop & Recursion Lines
                         </p>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {analysisResult.bottlenecks.map((b, idx) => (
                             <div
                               key={idx}
                               onClick={() => jumpToLine(b.line)}
-                              className="p-3 rounded-xl border border-white/[0.06] hover:border-indigo-500/40 bg-[#06070B] hover:bg-slate-900/60 cursor-pointer transition flex items-start gap-3 group"
+                              className={`p-2.5 rounded border ${themeConfig.border} hover:border-zinc-500 cursor-pointer transition flex items-start gap-2.5 group ${isLight ? 'bg-slate-50 hover:bg-slate-100' : 'bg-[#181818] hover:bg-[#202020]'}`}
                               title="Click to jump to line in editor"
                             >
-                              <span className="px-2 py-0.5 rounded font-mono text-xs font-bold bg-white/[0.05] text-slate-300 group-hover:bg-indigo-500 group-hover:text-white transition">
+                              <span className="px-1.5 py-0.5 rounded font-mono text-xs font-semibold bg-white/10 group-hover:bg-blue-600 group-hover:text-white transition">
                                 L{b.line}
                               </span>
                               <div className="flex-1">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs font-semibold text-slate-200 font-sans">{b.type}</span>
+                                  <span className="text-xs font-medium text-zinc-300">{b.type}</span>
                                   <span className="text-xs font-mono font-bold text-amber-400">{b.complexity}</span>
                                 </div>
-                                <p className="text-[11px] text-slate-400 mt-0.5 font-sans leading-normal">
+                                <p className="text-[11px] text-zinc-400 mt-0.5 font-sans leading-normal">
                                   {b.reason}
                                 </p>
                               </div>
@@ -1011,13 +1059,10 @@ export default function App() {
                     )}
                   </>
                 ) : (
-                  <div className="text-slate-600 flex flex-col items-center justify-center min-h-[380px] gap-2 text-center py-20">
-                    <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-center text-slate-500 text-lg mb-1">
-                      ⚡
-                    </div>
-                    <p className="text-xs text-slate-400 font-sans font-medium">Diagnostics Ready</p>
-                    <p className="text-[11px] text-slate-600 font-sans max-w-xs">
-                      Click &quot;Analyze&quot; to inspect algorithm bounds and memory stack.
+                  <div className="text-zinc-500 flex flex-col items-center justify-center min-h-[380px] gap-1 text-center py-20">
+                    <p className="font-mono text-xs">Diagnostics ready</p>
+                    <p className="text-[11px] text-zinc-500">
+                      Press Analyze to estimate algorithmic Big-O complexity.
                     </p>
                   </div>
                 )}
@@ -1029,29 +1074,29 @@ export default function App() {
 
       {/* Workspace Sidebar Drawer (Files grouped by language) */}
       {showWorkspace && (
-        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-md bg-[#0D101A] border-r border-white/10 h-full flex flex-col p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+        <div className="fixed inset-0 z-50 flex bg-black/50 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md ${themeConfig.surface} border-r ${themeConfig.border} h-full flex flex-col p-5 shadow-2xl`}>
+            <div className={`flex items-center justify-between pb-3 border-b ${themeConfig.border}`}>
               <div className="flex items-center gap-2">
-                <span className="text-xl">📁</span>
-                <h3 className="text-base font-bold text-white">Files Workspace</h3>
+                <span className="text-base">📁</span>
+                <h3 className="text-sm font-semibold">Workspace Files</h3>
               </div>
               <button
                 onClick={() => setShowWorkspace(false)}
-                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
+                className="w-7 h-7 rounded hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             {/* Language filter pills for workspace */}
-            <div className="flex items-center gap-1.5 py-3 border-b border-white/[0.06] overflow-x-auto">
+            <div className={`flex items-center gap-1 py-2.5 border-b ${themeConfig.border} overflow-x-auto`}>
               <button
                 onClick={() => setWorkspaceLang('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
                   workspaceLang === 'all'
-                    ? 'bg-slate-800 text-white font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 bg-white/[0.03]'
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 All ({workspaceFiles.length})
@@ -1062,63 +1107,61 @@ export default function App() {
                   <button
                     key={l.value}
                     onClick={() => setWorkspaceLang(l.value)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs font-medium transition flex items-center gap-1 cursor-pointer ${
                       workspaceLang === l.value
-                        ? 'bg-slate-800 text-white font-semibold'
-                        : 'text-slate-400 hover:text-slate-200 bg-white/[0.03]'
+                        ? 'bg-blue-600 text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
                     <span>{l.badge}</span>
                     <span>{l.label}</span>
-                    {count > 0 && <span className="text-[10px] text-slate-500 font-mono">({count})</span>}
+                    {count > 0 && <span className="text-[10px] opacity-60">({count})</span>}
                   </button>
                 )
               })}
             </div>
 
             {/* Workspace File List */}
-            <div className="flex-1 overflow-y-auto py-3 space-y-2">
+            <div className="flex-1 overflow-y-auto py-2.5 space-y-1.5">
               {filteredWorkspaceFiles.length === 0 ? (
-                <div className="text-center py-12 text-slate-500">
-                  <p className="text-2xl mb-2">📂</p>
-                  <p className="text-xs">No saved files in this section yet.</p>
-                  <p className="text-[11px] text-slate-600 mt-1">
-                    Click &quot;Save&quot; in the editor to keep snippets organized!
+                <div className="text-center py-12 text-zinc-500">
+                  <p className="text-xl mb-1">📂</p>
+                  <p className="text-xs">No files saved in this section yet.</p>
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    Click &quot;Save&quot; in the editor to store snippets.
                   </p>
                 </div>
               ) : (
                 filteredWorkspaceFiles.map((f) => (
                   <div
                     key={f.id}
-                    className="p-3 rounded-xl border border-white/[0.06] bg-[#08090E] hover:border-white/20 transition flex items-center justify-between group"
+                    className={`p-2.5 rounded border ${themeConfig.border} ${themeConfig.bg} hover:border-zinc-500 transition flex items-center justify-between group`}
                   >
                     <div
                       onClick={() => handleLoadFile(f)}
                       className="flex-1 cursor-pointer pr-2"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-sm">
-                          {LANGUAGES.find((l) => l.value === f.language)?.badge || '📄'}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-200 group-hover:text-emerald-400 transition font-mono">
+                        <span>{LANGUAGES.find((l) => l.value === f.language)?.badge || '📄'}</span>
+                        <span className="text-xs font-medium text-zinc-200 font-mono group-hover:text-blue-400 transition">
                           {f.name}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 font-mono mt-1">
+                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
                         {f.language.toUpperCase()} • {f.code.length} chars
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleLoadFile(f)}
-                        className="px-2 py-1 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition"
+                        className="px-2 py-0.5 rounded text-[11px] bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition cursor-pointer"
                       >
                         Open
                       </button>
                       <button
                         onClick={() => handleDeleteFile(f.id)}
-                        className="text-slate-500 hover:text-rose-400 p-1 transition text-xs"
+                        className="text-zinc-500 hover:text-rose-400 p-1 transition text-xs cursor-pointer"
                         title="Delete File"
                       >
                         🗑️
@@ -1129,18 +1172,17 @@ export default function App() {
               )}
             </div>
 
-            {/* Bottom info on storage */}
-            <div className="pt-3 border-t border-white/[0.06] text-[11px] text-slate-500 flex items-center justify-between">
-              <span>{user ? `Synced with account @${user.username}` : 'Saved locally in browser'}</span>
+            <div className={`pt-2.5 border-t ${themeConfig.border} text-[11px] text-zinc-500 flex items-center justify-between`}>
+              <span>{user ? `Cloud synced: @${user.username}` : 'Local browser storage'}</span>
               {!user && (
                 <button
                   onClick={() => {
                     setShowWorkspace(false)
                     setShowAuthModal(true)
                   }}
-                  className="text-emerald-400 hover:underline cursor-pointer"
+                  className="text-blue-400 hover:underline cursor-pointer"
                 >
-                  Sign in to sync
+                  Sign In to sync
                 </button>
               )}
             </div>
@@ -1150,36 +1192,36 @@ export default function App() {
 
       {/* Save File Modal */}
       {saveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-sm bg-[#0D101A] border border-white/10 rounded-2xl p-5 shadow-2xl">
-            <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className={`w-full max-w-sm ${themeConfig.surface} border ${themeConfig.border} rounded-lg p-4 shadow-2xl`}>
+            <h3 className="text-xs font-semibold mb-1 flex items-center gap-1.5 text-zinc-200">
               <span>💾</span> Save to {language.toUpperCase()} Section
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Enter a file name for this snippet:
+            <p className="text-xs text-zinc-400 mb-3">
+              Enter file name:
             </p>
 
             <input
               type="text"
               value={saveFileName}
               onChange={(e) => setSaveFileName(e.target.value)}
-              placeholder="e.g. merge_sort.py"
-              className="w-full bg-[#08090E] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500/60 mb-4"
+              placeholder="e.g. solution.py"
+              className={`w-full ${themeConfig.bg} border ${themeConfig.border} rounded px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500 mb-3`}
               autoFocus
             />
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setSaveModalOpen(false)}
-                className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs text-slate-300 transition"
+                className="px-3 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveFileConfirm}
-                className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+                className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition cursor-pointer"
               >
-                Save File
+                Save
               </button>
             </div>
           </div>
@@ -1188,29 +1230,29 @@ export default function App() {
 
       {/* Auth Modal (Login / Sign Up) */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-sm bg-[#0D101A] border border-white/10 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white">
-                {authMode === 'register' ? 'Create CodeLens Account' : 'Welcome Back'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className={`w-full max-w-sm ${themeConfig.surface} border ${themeConfig.border} rounded-lg p-5 shadow-2xl`}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">
+                {authMode === 'register' ? 'Create Account' : 'Sign In'}
               </h3>
               <button
                 onClick={() => setShowAuthModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-zinc-400 hover:text-white"
               >
                 ✕
               </button>
             </div>
 
             {authError && (
-              <div className="mb-4 p-2.5 rounded-xl bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs">
+              <div className="mb-3 p-2 rounded bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs">
                 {authError}
               </div>
             )}
 
-            <form onSubmit={handleAuthSubmit} className="space-y-3">
+            <form onSubmit={handleAuthSubmit} className="space-y-2.5">
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-1">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">
                   Username
                 </label>
                 <input
@@ -1219,13 +1261,13 @@ export default function App() {
                   value={authUsername}
                   onChange={(e) => setAuthUsername(e.target.value)}
                   placeholder="e.g. parikshit"
-                  className="w-full bg-[#08090E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                  className={`w-full ${themeConfig.bg} border ${themeConfig.border} rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500`}
                 />
               </div>
 
               {authMode === 'register' && (
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-1">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">
                     Email
                   </label>
                   <input
@@ -1234,13 +1276,13 @@ export default function App() {
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="w-full bg-[#08090E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                    className={`w-full ${themeConfig.bg} border ${themeConfig.border} rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500`}
                   />
                 </div>
               )}
 
               <div>
-                <label className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-1">
+                <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">
                   Password
                 </label>
                 <input
@@ -1249,20 +1291,20 @@ export default function App() {
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-[#08090E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                  className={`w-full ${themeConfig.bg} border ${themeConfig.border} rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500`}
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={authLoading}
-                className="w-full mt-2 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer"
+                className="w-full mt-2 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition cursor-pointer disabled:opacity-50"
               >
-                {authLoading ? 'Please wait...' : authMode === 'register' ? 'Sign Up' : 'Sign In'}
+                {authLoading ? 'Please wait...' : authMode === 'register' ? 'Create Account' : 'Sign In'}
               </button>
             </form>
 
-            <div className="mt-4 pt-3 border-t border-white/[0.06] text-center text-xs text-slate-400">
+            <div className={`mt-3 pt-2.5 border-t ${themeConfig.border} text-center text-xs text-zinc-400`}>
               {authMode === 'register' ? (
                 <p>
                   Already have an account?{' '}
@@ -1271,7 +1313,7 @@ export default function App() {
                       setAuthMode('login')
                       setAuthError('')
                     }}
-                    className="text-emerald-400 font-semibold hover:underline"
+                    className="text-blue-400 font-medium hover:underline cursor-pointer"
                   >
                     Sign In
                   </button>
@@ -1284,9 +1326,9 @@ export default function App() {
                       setAuthMode('register')
                       setAuthError('')
                     }}
-                    className="text-emerald-400 font-semibold hover:underline"
+                    className="text-blue-400 font-medium hover:underline cursor-pointer"
                   >
-                    Create Account
+                    Sign Up
                   </button>
                 </p>
               )}
@@ -1295,43 +1337,65 @@ export default function App() {
         </div>
       )}
 
-      {/* History Slide-Over Drawer */}
+      {/* History Slide-Over Drawer with Clear All & Delete Single */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-md bg-[#0D101A] border-l border-white/10 h-full flex flex-col p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md ${themeConfig.surface} border-l ${themeConfig.border} h-full flex flex-col p-5 shadow-2xl`}>
+            <div className={`flex items-center justify-between pb-3 border-b ${themeConfig.border}`}>
               <div className="flex items-center gap-2">
-                <span className="text-lg">📜</span>
-                <h3 className="text-base font-bold text-white">Analysis History</h3>
+                <span className="text-base">📜</span>
+                <h3 className="text-sm font-semibold">Analysis History</h3>
               </div>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
-              >
-                ✕
-              </button>
+
+              <div className="flex items-center gap-2">
+                {history.length > 0 && (
+                  <button
+                    onClick={handleClearAllHistory}
+                    className="text-xs text-rose-400 hover:text-rose-300 hover:underline cursor-pointer"
+                    title="Delete all history"
+                  >
+                    Clear All
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="w-7 h-7 rounded hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-4 space-y-3">
+            <div className="flex-1 overflow-y-auto py-3 space-y-2">
               {history.length === 0 ? (
-                <p className="text-slate-500 text-xs italic text-center py-10 font-mono">
+                <p className="text-zinc-500 text-xs italic text-center py-12 font-mono">
                   No previous records found.
                 </p>
               ) : (
                 history.map((item) => (
                   <div
                     key={item.id}
-                    className="p-3.5 rounded-xl border border-white/[0.06] bg-[#08090E] hover:border-white/20 transition"
+                    className={`p-3 rounded border ${themeConfig.border} ${themeConfig.bg} hover:border-zinc-500 transition group`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-mono text-slate-500">Record #{item.id}</span>
-                      <div className="flex items-center gap-2 text-xs font-mono font-bold">
-                        <span className="text-emerald-400">{item.time_complexity}</span>
-                        <span className="text-slate-600">•</span>
-                        <span className="text-indigo-400">{item.space_complexity}</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono text-zinc-500">Record #{item.id}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-mono font-semibold">
+                          <span className="text-emerald-400">{item.time_complexity}</span>
+                          <span className="text-zinc-500">•</span>
+                          <span className="text-indigo-400">{item.space_complexity}</span>
+                        </div>
+                        {/* Delete Single History Record Button */}
+                        <button
+                          onClick={(e) => handleDeleteHistoryItem(item.id, e)}
+                          className="text-zinc-500 hover:text-rose-400 p-0.5 transition cursor-pointer text-xs"
+                          title="Delete this record"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
-                    <pre className="text-[11px] text-slate-400 font-mono line-clamp-3 bg-[#0D101A] p-2 rounded-lg border border-white/5 overflow-hidden">
+                    <pre className={`text-[11px] text-zinc-400 font-mono line-clamp-3 p-2 rounded border ${themeConfig.border} overflow-hidden ${isLight ? 'bg-white' : 'bg-[#181818]'}`}>
                       {item.code}
                     </pre>
                     <button
@@ -1339,7 +1403,7 @@ export default function App() {
                         setCode(item.code)
                         setShowHistory(false)
                       }}
-                      className="mt-2 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1"
+                      className="mt-1.5 text-xs font-medium text-blue-400 hover:underline transition flex items-center gap-1 cursor-pointer"
                     >
                       <span>Load into editor</span>
                       <span>→</span>

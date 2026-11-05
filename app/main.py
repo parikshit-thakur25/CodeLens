@@ -344,3 +344,20 @@ def run_code_endpoint(submission: RunSubmission):
 def get_history(db: Session = Depends(get_db)):
     records = db.query(Analysis).order_by(Analysis.created_at.desc()).all()
     return records
+
+
+@app.delete("/history")
+def clear_all_history(db: Session = Depends(get_db)):
+    db.query(Analysis).delete()
+    db.commit()
+    return {"message": "All analysis history cleared"}
+
+
+@app.delete("/history/{record_id}")
+def delete_single_history(record_id: int, db: Session = Depends(get_db)):
+    item = db.query(Analysis).filter(Analysis.id == record_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="History record not found")
+    db.delete(item)
+    db.commit()
+    return {"message": "History record deleted"}
