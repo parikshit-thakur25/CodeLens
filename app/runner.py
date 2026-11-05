@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
-# Supported compiler mappings on Wandbox (Cloud fallback)
+# Supported compiler mappings on Wandbox (Tier 3 fallback)
 COMPILER_MAPPING = {
     "python": "cpython-3.12.7",
     "c": "gcc-13.2.0",
@@ -20,6 +20,17 @@ COMPILER_MAPPING = {
 }
 
 WANDBOX_API_URL = "https://wandbox.org/api/compile.json"
+
+# Supported language mappings on Judge0 CE (Tier 2 fast cloud runner)
+JUDGE0_LANG_MAPPING = {
+    "java": 91,    # Java (JDK 17.0.6)
+    "c": 103,      # C (GCC 14.1.0)
+    "cpp": 105,    # C++ (GCC 14.1.0)
+    "c++": 105,
+    "python": 100, # Python (3.12.5)
+}
+
+JUDGE0_API_URL = "https://ce.judge0.com/submissions?wait=true"
 
 
 def prepare_code(code: str, language: str) -> str:
@@ -32,11 +43,28 @@ def prepare_code(code: str, language: str) -> str:
     return code
 
 
+def prepare_code_judge0(code: str, language: str) -> str:
+    lang = language.lower()
+    if lang == "java":
+        # Judge0 executes 'java Main'.
+        # If code contains a public class not named Main, rename it to Main.
+        m = re.search(r"\bpublic\s+class\s+([A-Za-z0-9_]+)", code)
+        if m and m.group(1) != "Main":
+            target = m.group(1)
+            code = re.sub(rf"\bpublic\s+class\s+{target}\b", "public class Main", code)
+        elif not m and re.search(r"\bpublic\s+static\s+void\s+main\b", code):
+            m2 = re.search(r"\bclass\s+([A-Za-z0-9_]+)", code)
+            if m2 and m2.group(1) != "Main":
+                target = m2.group(1)
+                code = re.sub(rf"\bclass\s+{target}\b", "class Main", code, count=1)
+    return code
+
+
 def execute_local(code: str, language: str, stdin: str = "") -> Optional[Dict[str, Any]]:
     """
     Tier-1 Ultra-Fast Native Sandbox Execution.
     Executes in 15ms - 150ms directly on the host with strict timeouts.
-    Returns None if the local compiler is missing so it seamlessly falls back to Wandbox.
+    Returns None if the local compiler is missing so it seamlessly falls back to Tier 2/3.
     """
     lang = language.lower()
     start_time = time.perf_counter()
@@ -96,8 +124,6 @@ def execute_local(code: str, language: str, stdin: str = "") -> Optional[Dict[st
                 )
 
                 if compile_res.returncode != 0:
-                    if "Unable to locate a Java Runtime" in compile_res.stderr or "No Java runtime present" in compile_res.stderr:
-                        return None
                     elapsed_ms = round((time.perf_counter() - start_time) * 1000)
                     return {
                         "success": False,
@@ -161,8 +187,6 @@ def execute_local(code: str, language: str, stdin: str = "") -> Optional[Dict[st
                     )
 
                 if compile_res.returncode != 0:
-                    if "Unable to locate a Java Runtime" in compile_res.stderr or "No Java runtime present" in compile_res.stderr:
-                        return None
                     elapsed_ms = round((time.perf_counter() - start_time) * 1000)
                     return {
                         "success": False,
@@ -259,14 +283,89 @@ def execute_local(code: str, language: str, stdin: str = "") -> Optional[Dict[st
                     }
 
     except Exception:
-        # Fall back to Wandbox on any unexpected local execution failure
         return None
 
     return None
 
 
+def execute_judge0(code: str, language: str, stdin: str = "") -> Optional[Dict[str, Any]]:
+    """
+    Tier-2 Fast Cloud Sandbox via Judge0 CE.
+    Executes in 800ms - 2000ms (10x faster than Wandbox for Java/C/C++).
+    """
+    lang = language.lower()
+    lang_id = JUDGE0_LANG_MAPPING.get(lang)
+    if not lang_id:
+        return None
+
+    formatted_code = prepare_code_judge0(code, lang)
+    payload = {
+        "language_id": lang_id,
+        "source_code": formatted_code,
+        "stdin": stdin or "",
+    }
+
+    start_time = time.perf_counter()
+
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            JUDGE0_API_URL,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            },
+        )
+
+        with urllib.request.urlopen(req, timeout=10) as response:
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            res_json = json.loads(response.read().decode("utf-8"))
+
+            status_obj = res_json.get("status") or {}
+            status_id = status_obj.get("id", 0)
+
+            stdout = res_json.get("stdout") or ""
+            stderr = res_json.get("stderr") or ""
+            compile_output = res_json.get("compile_output") or ""
+
+            # Check compilation error (Judge0 status id 6)
+            if status_id == 6 and compile_output:
+                return {
+                    "success": False,
+                    "stdout": "",
+                    "stderr": compile_output.strip(),
+                    "exit_code": "1",
+                    "execution_time_ms": elapsed_ms,
+                }
+
+            # Check runtime errors (NZEC, Time Limit Exceeded, etc.)
+            if status_id in (5, 11, 12, 13) or stderr:
+                err_msg = stderr.strip() or compile_output.strip() or status_obj.get("description", "Runtime Error")
+                return {
+                    "success": False,
+                    "stdout": stdout,
+                    "stderr": err_msg,
+                    "exit_code": str(status_id),
+                    "execution_time_ms": elapsed_ms,
+                }
+
+            is_success = status_id == 3  # Accepted
+            return {
+                "success": is_success,
+                "stdout": stdout,
+                "stderr": stderr.strip(),
+                "exit_code": "0" if is_success else str(status_id),
+                "execution_time_ms": elapsed_ms,
+            }
+
+    except Exception:
+        # Silently fall back to Wandbox on Judge0 timeout / failure
+        return None
+
+
 def execute_wandbox(code: str, language: str, stdin: str = "") -> Dict[str, Any]:
-    """Tier-2 Cloud Isolated Sandbox Fallback via Wandbox"""
+    """Tier-3 Cloud Isolated Sandbox Fallback via Wandbox"""
     lang = language.lower()
     compiler = COMPILER_MAPPING.get(lang)
 
@@ -358,12 +457,20 @@ def execute_wandbox(code: str, language: str, stdin: str = "") -> Dict[str, Any]
 
 def execute_code(code: str, language: str, stdin: str = "") -> Dict[str, Any]:
     """
-    Dual-Tier Execution Strategy:
-    1. Try ultra-fast native sandbox first (< 100ms response)
-    2. Seamlessly fall back to Wandbox cloud sandbox if local run is unavailable
+    3-Tier Execution Pipeline:
+    1. Tier 1: Instant Native Host Sandbox (~25ms for Python, sub-second for C/C++)
+    2. Tier 2: Judge0 CE Fast Cloud Sandbox (~1.5s for Java / Cloud C)
+    3. Tier 3: Wandbox Cloud Sandbox (Reliable fallback)
     """
+    # Try Tier 1: Local
     local_result = execute_local(code, language, stdin)
     if local_result is not None:
         return local_result
 
+    # Try Tier 2: Judge0 Fast Cloud Engine
+    judge0_result = execute_judge0(code, language, stdin)
+    if judge0_result is not None:
+        return judge0_result
+
+    # Tier 3: Wandbox Fallback
     return execute_wandbox(code, language, stdin)
