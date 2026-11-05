@@ -84,3 +84,4 @@ def dispatch_sms_otp(phone: str, otp: str) -> Dict[str, Any]:
         "delivered": False,
         "message": "Gateway API keys not found in environment (FAST2SMS_API_KEY or TWILIO_ACCOUNT_SID)",
     }
+
