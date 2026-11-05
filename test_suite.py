@@ -88,12 +88,19 @@ class TestCodeLensEngine(unittest.TestCase):
             self.assertIn("token", g_res)
             self.assertEqual(g_res["user"]["email"], "coder_test@gmail.com")
 
-            # Test Phone OTP send & verify
+            # Test Phone OTP send & verify with real random OTP and password setting
             test_phone = "+919999988888"
             p_send = send_phone_otp(PhoneSendOtpRequest(phone=test_phone))
             self.assertTrue(p_send["success"])
 
-            p_verify = verify_phone_otp(PhoneVerifyOtpRequest(phone=test_phone, otp="123456"), db=db)
+            from app.main import PHONE_OTP_STORE
+            generated_otp = PHONE_OTP_STORE[test_phone]["otp"]
+            self.assertEqual(len(generated_otp), 6)
+
+            p_verify = verify_phone_otp(
+                PhoneVerifyOtpRequest(phone=test_phone, otp=generated_otp, password="MySecurePassword123"),
+                db=db
+            )
             self.assertIn("token", p_verify)
             self.assertEqual(p_verify["user"]["phone"], test_phone)
         finally:

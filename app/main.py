@@ -12,6 +12,8 @@ import re
 import secrets
 import time
 
+from app.sms import dispatch_sms_otp
+
 from app.analyzer import analyze_python_detailed
 from app.analyzer_multilang import analyze_code_multilang_detailed
 from app.runner import execute_code
@@ -131,6 +133,11 @@ class PhoneSendOtpRequest(BaseModel):
 class PhoneVerifyOtpRequest(BaseModel):
     phone: str = Field(..., min_length=8, max_length=20)
     otp: str = Field(..., min_length=4, max_length=10)
+    password: Optional[str] = None
+
+
+class SetPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=6, max_length=100)
 
 
 @app.post("/auth/register")
@@ -167,7 +174,7 @@ def register_user(data: UserRegister, db: Session = Depends(get_db)):
 def login_user(data: UserLogin, db: Session = Depends(get_db)):
     clean_identifier = data.username.strip().lower()
     user = db.query(User).filter(
-        (User.username == clean_identifier) | (User.email == clean_identifier)
+        (User.username == clean_identifier) | (User.email == clean_identifier) | (User.phone == clean_identifier)
     ).first()
 
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
@@ -252,18 +259,28 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
 def send_phone_otp(data: PhoneSendOtpRequest):
     clean_phone = re.sub(r"[^\d+]", "", data.phone.strip())
     if len(clean_phone) < 8:
-        raise HTTPException(status_code=400, detail="Please enter a valid mobile number")
+        raise HTTPException(status_code=400, detail="Please enter a valid mobile number with country code")
 
-    otp = "123456"
+    # Generate cryptographically secure random 6-digit OTP
+    otp = f"{secrets.randbelow(900000) + 100000}"
     PHONE_OTP_STORE[clean_phone] = {
         "otp": otp,
         "exp": time.time() + 600,
     }
 
+    # Dispatch carrier SMS via Fast2SMS (India) or Twilio (Global)
+    sms_res = dispatch_sms_otp(clean_phone, otp)
+
+    if sms_res.get("delivered"):
+        msg = f"Verification code sent to {clean_phone}"
+    else:
+        # Fallback message for development / testing
+        msg = f"OTP generated for {clean_phone}."
+
     return {
         "success": True,
-        "message": f"Verification code sent to {clean_phone}",
-        "demo_otp": "123456",
+        "message": msg,
+        "sms_delivered": sms_res.get("delivered", False),
     }
 
 
@@ -273,13 +290,19 @@ def verify_phone_otp(data: PhoneVerifyOtpRequest, db: Session = Depends(get_db))
     submitted_otp = data.otp.strip()
 
     stored = PHONE_OTP_STORE.get(clean_phone)
-    if submitted_otp != "123456" and (not stored or stored["otp"] != submitted_otp or stored["exp"] < time.time()):
+    if not stored or stored["otp"] != submitted_otp or stored["exp"] < time.time():
         raise HTTPException(status_code=400, detail="Invalid or expired verification code")
 
+    # Delete OTP after successful verification
+    del PHONE_OTP_STORE[clean_phone]
+
     user = db.query(User).filter(User.phone == clean_phone).first()
+    has_pwd = data.password and len(data.password.strip()) >= 6
+    pwd_hash = hash_password(data.password.strip()) if has_pwd else hash_password(secrets.token_hex(16))
+
     if not user:
         suffix = clean_phone[-4:] if len(clean_phone) >= 4 else "dev"
-        base_un = f"dev_{suffix}"
+        base_un = f"user_{suffix}"
         un = base_un
         count = 1
         while db.query(User).filter(User.username == un).first():
@@ -291,11 +314,15 @@ def verify_phone_otp(data: PhoneVerifyOtpRequest, db: Session = Depends(get_db))
             phone=clean_phone,
             email=f"{clean_phone.replace('+', '')}@phone.codelens",
             auth_provider="phone",
-            password_hash=hash_password(secrets.token_hex(16)),
+            password_hash=pwd_hash,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        if has_pwd:
+            user.password_hash = pwd_hash
+            db.commit()
 
     token = create_token(user.id, user.username)
     return {
@@ -308,6 +335,13 @@ def verify_phone_otp(data: PhoneVerifyOtpRequest, db: Session = Depends(get_db))
             "avatar": user.avatar_url,
         },
     }
+
+
+@app.post("/auth/set-password")
+def set_user_password(data: SetPasswordRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user.password_hash = hash_password(data.password)
+    db.commit()
+    return {"success": True, "message": "Account password set successfully"}
 
 
 @app.get("/auth/me")
