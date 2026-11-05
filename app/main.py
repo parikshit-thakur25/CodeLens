@@ -124,6 +124,7 @@ class GoogleAuthRequest(BaseModel):
     email: Optional[str] = None
     name: Optional[str] = None
     avatar: Optional[str] = None
+    password: Optional[str] = None
 
 
 class PhoneSendOtpRequest(BaseModel):
@@ -228,17 +229,26 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
             un = f"{base_un}_{count}"
             count += 1
 
+        pwd_hash = hash_password(data.password.strip()) if data.password and len(data.password.strip()) >= 4 else hash_password(secrets.token_hex(16))
         user = User(
             username=un,
             email=clean_email,
             avatar_url=avatar,
             auth_provider="google",
-            password_hash=hash_password(secrets.token_hex(16)),
+            password_hash=pwd_hash,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
     else:
+        if data.password and len(data.password.strip()) >= 4:
+            if user.password_hash and user.auth_provider != "google":
+                if not verify_password(data.password.strip(), user.password_hash):
+                    raise HTTPException(status_code=400, detail="Invalid password for this existing account")
+            else:
+                user.password_hash = hash_password(data.password.strip())
+                db.commit()
+
         if avatar and not user.avatar_url:
             user.avatar_url = avatar
             db.commit()
