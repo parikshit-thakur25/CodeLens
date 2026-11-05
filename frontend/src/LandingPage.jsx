@@ -407,7 +407,7 @@ Zero login required.`,
       {/* Footer */}
       <footer className="border-t border-zinc-800/80 bg-[#08090f] py-6 text-center text-xs text-zinc-500 space-y-2">
         <p>
-          CodeLens Studio • Built by <a href="https://parikshit07.tech" target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white font-medium underline">Parikshit Thakur</a>
+          CodeLens Studio • Built by <a href="https://www.parikshit07.tech" target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white font-medium underline">Parikshit Thakur</a>
         </p>
         <p className="text-[11px] text-zinc-600 font-mono">
           Online Multi-Language Compiler & Algorithmic Complexity Diagnostics
