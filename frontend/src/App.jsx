@@ -207,6 +207,35 @@ export default function App() {
 
   const editorRef = useRef(null)
 
+  // Synchronize browser back/forward buttons (<- left arrow navigation)
+  useEffect(() => {
+    const handlePopState = () => {
+      const isCompiler = window.location.hash.includes('compiler') || window.location.hash.includes('studio')
+      setCurrentView(isCompiler ? 'compiler' : 'landing')
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    window.addEventListener('hashchange', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('hashchange', handlePopState)
+    }
+  }, [])
+
+  const navigateToCompiler = () => {
+    window.history.pushState({ view: 'compiler' }, '', '#compiler')
+    setCurrentView('compiler')
+  }
+
+  const navigateToLanding = () => {
+    if (window.location.hash.includes('compiler') || window.location.hash.includes('studio')) {
+      window.history.back()
+    } else {
+      window.history.pushState({ view: 'landing' }, '', window.location.pathname)
+      setCurrentView('landing')
+    }
+  }
+
   // Close dropdowns on outside click
   useEffect(() => {
     const closeDropdowns = () => {
@@ -715,10 +744,7 @@ export default function App() {
       <LandingPage
         user={user}
         token={token}
-        onLaunchStudio={() => {
-          setCurrentView('compiler')
-          window.location.hash = 'compiler'
-        }}
+        onLaunchStudio={navigateToCompiler}
         onLoginSuccess={(authData) => {
           localStorage.setItem('codelens_token', authData.token)
           setToken(authData.token)
@@ -750,10 +776,7 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => {
-              setCurrentView('landing')
-              window.location.hash = ''
-            }}
+            onClick={navigateToLanding}
             className="flex items-center gap-2 group cursor-pointer text-left"
             title="Return to Guide Tour & Overview"
           >
@@ -930,8 +953,11 @@ export default function App() {
           ) : (
             <button
               onClick={() => {
-                setCurrentView('landing')
-                window.location.hash = 'auth-section'
+                navigateToLanding()
+                setTimeout(() => {
+                  const el = document.getElementById('auth-section')
+                  if (el) el.scrollIntoView({ behavior: 'smooth' })
+                }, 100)
               }}
               className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer hover:bg-white/5 rounded border border-zinc-700/60"
               title="Sign In with Account on Welcome Page"

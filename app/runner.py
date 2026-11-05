@@ -61,7 +61,7 @@ def execute_code(code: str, language: str, stdin: str = "") -> Dict[str, Any]:
             },
         )
 
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with urllib.request.urlopen(req, timeout=25) as response:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             res_json = json.loads(response.read().decode("utf-8"))
 
