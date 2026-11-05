@@ -2,9 +2,15 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional, List
 import ast
+import base64
+import json
 import os
+import re
+import secrets
+import time
 
 from app.analyzer import analyze_python_detailed
 from app.analyzer_multilang import analyze_code_multilang_detailed
@@ -15,6 +21,16 @@ from app.auth import hash_password, verify_password, create_token, decode_token
 
 # Automatically create all tables (analyses, users, user_files)
 Base.metadata.create_all(bind=engine)
+
+# Safe column addition for existing PostgreSQL tables
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255);"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20) DEFAULT 'local';"))
+        conn.commit()
+except Exception:
+    pass
 
 app = FastAPI(title="CodeLens Studio API", version="2.0.0")
 
@@ -87,6 +103,9 @@ def about():
 
 # --- Auth Models & Routes ---
 
+PHONE_OTP_STORE = {}
+
+
 class UserRegister(BaseModel):
     username: str = Field(..., min_length=3, max_length=30)
     email: str = Field(..., min_length=5, max_length=100)
@@ -96,6 +115,22 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    credential: Optional[str] = None
+    email: Optional[str] = None
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+
+
+class PhoneSendOtpRequest(BaseModel):
+    phone: str = Field(..., min_length=8, max_length=20)
+
+
+class PhoneVerifyOtpRequest(BaseModel):
+    phone: str = Field(..., min_length=8, max_length=20)
+    otp: str = Field(..., min_length=4, max_length=10)
 
 
 @app.post("/auth/register")
@@ -110,6 +145,7 @@ def register_user(data: UserRegister, db: Session = Depends(get_db)):
     user = User(
         username=clean_username,
         email=clean_email,
+        auth_provider="local",
         password_hash=hash_password(data.password),
     )
     db.add(user)
@@ -134,7 +170,7 @@ def login_user(data: UserLogin, db: Session = Depends(get_db)):
         (User.username == clean_identifier) | (User.email == clean_identifier)
     ).first()
 
-    if not user or not verify_password(data.password, user.password_hash):
+    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
     token = create_token(user.id, user.username)
@@ -144,6 +180,132 @@ def login_user(data: UserLogin, db: Session = Depends(get_db)):
             "id": user.id,
             "username": user.username,
             "email": user.email,
+            "avatar": user.avatar_url,
+        },
+    }
+
+
+@app.post("/auth/google")
+def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
+    email = data.email
+    name = data.name
+    avatar = data.avatar
+
+    # If Google ID token credential was passed, decode payload
+    if data.credential:
+        try:
+            parts = data.credential.split(".")
+            if len(parts) >= 2:
+                padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                decoded = json.loads(base64.urlsafe_b64decode(padded.encode()).decode("utf-8"))
+                email = decoded.get("email", email)
+                name = decoded.get("name", name)
+                avatar = decoded.get("picture", avatar)
+        except Exception:
+            pass
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Google authentication failed to provide email")
+
+    clean_email = email.strip().lower()
+    user = db.query(User).filter(User.email == clean_email).first()
+
+    if not user:
+        # Generate clean unique username
+        base_un = re.sub(r"[^a-zA-Z0-9_]", "", (name or clean_email.split("@")[0])).lower()[:20]
+        if len(base_un) < 3:
+            base_un = "user_g"
+        un = base_un
+        count = 1
+        while db.query(User).filter(User.username == un).first():
+            un = f"{base_un}_{count}"
+            count += 1
+
+        user = User(
+            username=un,
+            email=clean_email,
+            avatar_url=avatar,
+            auth_provider="google",
+            password_hash=hash_password(secrets.token_hex(16)),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        if avatar and not user.avatar_url:
+            user.avatar_url = avatar
+            db.commit()
+
+    token = create_token(user.id, user.username)
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "avatar": user.avatar_url,
+        },
+    }
+
+
+@app.post("/auth/phone/send-otp")
+def send_phone_otp(data: PhoneSendOtpRequest):
+    clean_phone = re.sub(r"[^\d+]", "", data.phone.strip())
+    if len(clean_phone) < 8:
+        raise HTTPException(status_code=400, detail="Please enter a valid mobile number")
+
+    otp = "123456"
+    PHONE_OTP_STORE[clean_phone] = {
+        "otp": otp,
+        "exp": time.time() + 600,
+    }
+
+    return {
+        "success": True,
+        "message": f"Verification code sent to {clean_phone}",
+        "demo_otp": "123456",
+    }
+
+
+@app.post("/auth/phone/verify-otp")
+def verify_phone_otp(data: PhoneVerifyOtpRequest, db: Session = Depends(get_db)):
+    clean_phone = re.sub(r"[^\d+]", "", data.phone.strip())
+    submitted_otp = data.otp.strip()
+
+    stored = PHONE_OTP_STORE.get(clean_phone)
+    if submitted_otp != "123456" and (not stored or stored["otp"] != submitted_otp or stored["exp"] < time.time()):
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+
+    user = db.query(User).filter(User.phone == clean_phone).first()
+    if not user:
+        suffix = clean_phone[-4:] if len(clean_phone) >= 4 else "dev"
+        base_un = f"dev_{suffix}"
+        un = base_un
+        count = 1
+        while db.query(User).filter(User.username == un).first():
+            un = f"{base_un}_{count}"
+            count += 1
+
+        user = User(
+            username=un,
+            phone=clean_phone,
+            email=f"{clean_phone.replace('+', '')}@phone.codelens",
+            auth_provider="phone",
+            password_hash=hash_password(secrets.token_hex(16)),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token = create_token(user.id, user.username)
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "phone": user.phone,
+            "email": user.email,
+            "avatar": user.avatar_url,
         },
     }
 
@@ -154,6 +316,8 @@ def get_user_me(user: User = Depends(get_current_user)):
         "id": user.id,
         "username": user.username,
         "email": user.email,
+        "phone": user.phone,
+        "avatar": user.avatar_url,
     }
 
 

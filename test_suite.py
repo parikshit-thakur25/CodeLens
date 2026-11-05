@@ -77,6 +77,28 @@ class TestCodeLensEngine(unittest.TestCase):
         time_c, space_c, _, _ = analyze_code_multilang_detailed(code, "cpp")
         self.assertEqual(time_c, "O(n)")
 
+    def test_google_and_phone_auth(self):
+        from app.main import google_auth, send_phone_otp, verify_phone_otp, GoogleAuthRequest, PhoneSendOtpRequest, PhoneVerifyOtpRequest
+        from app.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            # Test Google sign-in
+            g_res = google_auth(GoogleAuthRequest(email="coder_test@gmail.com", name="Coder Test"), db=db)
+            self.assertIn("token", g_res)
+            self.assertEqual(g_res["user"]["email"], "coder_test@gmail.com")
+
+            # Test Phone OTP send & verify
+            test_phone = "+919999988888"
+            p_send = send_phone_otp(PhoneSendOtpRequest(phone=test_phone))
+            self.assertTrue(p_send["success"])
+
+            p_verify = verify_phone_otp(PhoneVerifyOtpRequest(phone=test_phone, otp="123456"), db=db)
+            self.assertIn("token", p_verify)
+            self.assertEqual(p_verify["user"]["phone"], test_phone)
+        finally:
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()
