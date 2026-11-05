@@ -168,32 +168,7 @@ export default function App() {
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 })
   const [copied, setCopied] = useState(false)
 
-  // User Auth State
-  const [token, setToken] = useState(localStorage.getItem('codelens_token') || '')
-  const [user, setUser] = useState(null)
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authTab, setAuthTab] = useState('phone') // 'phone' | 'password'
-  const [authMode, setAuthMode] = useState('login')
-  const [authUsername, setAuthUsername] = useState('')
-  const [authEmail, setAuthEmail] = useState('')
-  const [authPassword, setAuthPassword] = useState('')
-  const [authError, setAuthError] = useState('')
-  const [authLoading, setAuthLoading] = useState(false)
-
-  // Phone Auth State
-  const [phone, setPhone] = useState('')
-  const [phoneOtp, setPhoneOtp] = useState('')
-  const [phonePassword, setPhonePassword] = useState('')
-  const [phoneStep, setPhoneStep] = useState('phone') // 'phone' | 'otp'
-  const [phoneInfo, setPhoneInfo] = useState('')
-
-  // Google Auth State
-  const [googleClientId, setGoogleClientId] = useState(
-    localStorage.getItem('codelens_google_client_id') || import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-  )
-  const [showGoogleConfig, setShowGoogleConfig] = useState(false)
-
-  // File Workspace State
+  // File Workspace State (Local persistent storage)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [workspaceFiles, setWorkspaceFiles] = useState([])
   const [workspaceLang, setWorkspaceLang] = useState('all')
@@ -246,60 +221,14 @@ export default function App() {
     return () => window.removeEventListener('click', closeDropdowns)
   }, [])
 
-  // Check Auth Session on mount
+  // Load persistent workspace files on mount
   useEffect(() => {
-    if (token) {
-      fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((u) => {
-          if (u) {
-            setUser(u)
-            loadUserFiles(token)
-          } else {
-            handleLogout()
-          }
-        })
-        .catch(() => {})
-    } else {
-      const local = localStorage.getItem('codelens_guest_files')
-      if (local) {
-        try {
-          setWorkspaceFiles(JSON.parse(local))
-        } catch (_) {}
+    try {
+      const saved = localStorage.getItem('codelens_workspace_files') || localStorage.getItem('codelens_guest_files')
+      if (saved) {
+        setWorkspaceFiles(JSON.parse(saved))
       }
-    }
-  }, [token])
-
-  // Handle Google OAuth Redirect Return
-  useEffect(() => {
-    if (window.location.hash.includes('access_token=')) {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1))
-      const accessToken = hashParams.get('access_token')
-      if (accessToken) {
-        window.history.replaceState(null, '', window.location.pathname)
-        setAuthLoading(true)
-        setShowAuthModal(true)
-        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
-          .then((r) => r.json())
-          .then((info) => {
-            if (info.email) {
-              handleGoogleSubmit(info.email, info.name, info.picture)
-            } else {
-              setAuthError('Google sign in did not return an email address.')
-            }
-          })
-          .catch(() => {
-            setAuthError('Could not verify Google authentication session.')
-          })
-          .finally(() => {
-            setAuthLoading(false)
-          })
-      }
-    }
+    } catch (_) {}
   }, [])
 
   const handleEditorDidMount = (editor) => {
@@ -348,242 +277,29 @@ export default function App() {
     URL.revokeObjectURL(url)
   }
 
-  // --- Auth Handlers ---
-  const handleGoogleSubmit = async (customEmail = null, customName = null, customAvatar = null) => {
-    setAuthError('')
-    setAuthLoading(true)
-    const emailToUse = customEmail || 'parikshit@gmail.com'
-    const nameToUse = customName || emailToUse.split('@')[0]
-
-    try {
-      const res = await fetch(`${API_URL}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailToUse, name: nameToUse, avatar: customAvatar }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setAuthError(data.detail || 'Google authentication failed')
-      } else {
-        localStorage.setItem('codelens_token', data.token)
-        setToken(data.token)
-        setUser(data.user)
-        setShowAuthModal(false)
-        setShowGoogleConfig(false)
-        loadUserFiles(data.token)
-      }
-    } catch (_) {
-      setAuthError('Could not connect to Google sign in service.')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
-  const handleGoogleOAuthRedirect = () => {
-    const cid = googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('codelens_google_client_id')
-    if (cid && cid.trim().length > 5) {
-      const redirectUri = window.location.origin
-      const scope = 'openid email profile'
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
-        cid.trim()
-      )}&redirect_uri=${encodeURIComponent(
-        redirectUri
-      )}&response_type=token&scope=${encodeURIComponent(
-        scope
-      )}&prompt=select_account`
-      window.location.href = authUrl
-    } else {
-      setShowGoogleConfig(true)
-    }
-  }
-
-  const handleSaveGoogleClientId = (id) => {
-    localStorage.setItem('codelens_google_client_id', id.trim())
-    setGoogleClientId(id.trim())
-    setShowGoogleConfig(false)
-    if (id.trim().length > 5) {
-      const redirectUri = window.location.origin
-      const scope = 'openid email profile'
-      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
-        id.trim()
-      )}&redirect_uri=${encodeURIComponent(
-        redirectUri
-      )}&response_type=token&scope=${encodeURIComponent(
-        scope
-      )}&prompt=select_account`
-    }
-  }
-
-  const handleSendPhoneOtp = async (e) => {
-    e.preventDefault()
-    setAuthError('')
-    setPhoneInfo('')
-    if (!phone || phone.trim().length < 8) {
-      setAuthError('Please enter a valid mobile number with country code (e.g. +91 98765 43210)')
-      return
-    }
-    setAuthLoading(true)
-    try {
-      const res = await fetch(`${API_URL}/auth/phone/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setAuthError(data.detail || 'Failed to send OTP')
-      } else {
-        setPhoneStep('otp')
-        setPhoneInfo(data.message || `Verification code sent to ${phone}`)
-      }
-    } catch (_) {
-      setAuthError('Could not reach mobile verification service.')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
-  const handleVerifyPhoneOtp = async (e) => {
-    e.preventDefault()
-    setAuthError('')
-    if (!phoneOtp || phoneOtp.trim().length < 4) {
-      setAuthError('Please enter the verification code')
-      return
-    }
-    setAuthLoading(true)
-    try {
-      const res = await fetch(`${API_URL}/auth/phone/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone,
-          otp: phoneOtp,
-          password: phonePassword || undefined,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setAuthError(data.detail || 'Invalid verification code')
-      } else {
-        localStorage.setItem('codelens_token', data.token)
-        setToken(data.token)
-        setUser(data.user)
-        setShowAuthModal(false)
-        setPhoneStep('phone')
-        setPhoneOtp('')
-        setPhonePassword('')
-        loadUserFiles(data.token)
-      }
-    } catch (_) {
-      setAuthError('Verification failed. Please retry.')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
-  const handleAuthSubmit = async (e) => {
-    e.preventDefault()
-    setAuthError('')
-    setAuthLoading(true)
-
-    const endpoint = authMode === 'register' ? '/auth/register' : '/auth/login'
-    const body = authMode === 'register'
-      ? { username: authUsername, email: authEmail, password: authPassword }
-      : { username: authUsername, password: authPassword }
-
-    try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setAuthError(data.detail || 'Authentication failed')
-      } else {
-        localStorage.setItem('codelens_token', data.token)
-        setToken(data.token)
-        setUser(data.user)
-        setShowAuthModal(false)
-        setAuthPassword('')
-        loadUserFiles(data.token)
-      }
-    } catch (_) {
-      setAuthError('Could not reach auth service.')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('codelens_token')
-    setToken('')
-    setUser(null)
-    const local = localStorage.getItem('codelens_guest_files')
-    if (local) {
-      try {
-        setWorkspaceFiles(JSON.parse(local))
-      } catch (_) {}
-    } else {
-      setWorkspaceFiles([])
-    }
-  }
-
-  // --- File Workspace Handlers ---
-  const loadUserFiles = async (authToken) => {
-    try {
-      const res = await fetch(`${API_URL}/files`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setWorkspaceFiles(data)
-      }
-    } catch (_) {}
-  }
-
+  // --- File Workspace Handlers (100% Local Browser Persistence) ---
   const handleOpenSaveModal = () => {
     setSaveFileName(currentFileName || `solution.${language === 'python' ? 'py' : language === 'cpp' ? 'cpp' : language === 'c' ? 'c' : 'java'}`)
     setSaveModalOpen(true)
   }
 
-  const handleSaveFileConfirm = async () => {
+  const handleSaveFileConfirm = () => {
     if (!saveFileName.trim()) return
     const name = saveFileName.trim()
-
-    if (token) {
-      try {
-        const res = await fetch(`${API_URL}/files`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ name, language, code }),
-        })
-        if (res.ok) {
-          const saved = await res.json()
-          setWorkspaceFiles([saved, ...workspaceFiles.filter((f) => f.id !== saved.id)])
-          setCurrentFileName(name)
-          setSaveModalOpen(false)
-        }
-      } catch (_) {
-        setError('Failed to sync file.')
-      }
-    } else {
-      const newFile = {
-        id: Date.now(),
-        name,
-        language,
-        code,
-        updated_at: new Date().toISOString(),
-      }
-      const updated = [newFile, ...workspaceFiles.filter((f) => f.name !== name)]
-      setWorkspaceFiles(updated)
-      localStorage.setItem('codelens_guest_files', JSON.stringify(updated))
-      setCurrentFileName(name)
-      setSaveModalOpen(false)
+    const newFile = {
+      id: Date.now(),
+      name,
+      language,
+      code,
+      updated_at: new Date().toISOString(),
     }
+    const updated = [newFile, ...workspaceFiles.filter((f) => f.name !== name)]
+    setWorkspaceFiles(updated)
+    try {
+      localStorage.setItem('codelens_workspace_files', JSON.stringify(updated))
+    } catch (_) {}
+    setCurrentFileName(name)
+    setSaveModalOpen(false)
   }
 
   const handleLoadFile = (f) => {
@@ -595,20 +311,12 @@ export default function App() {
     setRunResult(null)
   }
 
-  const handleDeleteFile = async (fId) => {
-    if (token) {
-      try {
-        await fetch(`${API_URL}/files/${fId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      } catch (_) {}
-    }
+  const handleDeleteFile = (fId) => {
     const filtered = workspaceFiles.filter((f) => f.id !== fId)
     setWorkspaceFiles(filtered)
-    if (!token) {
-      localStorage.setItem('codelens_guest_files', JSON.stringify(filtered))
-    }
+    try {
+      localStorage.setItem('codelens_workspace_files', JSON.stringify(filtered))
+    } catch (_) {}
   }
 
   // --- History Handlers with Delete Support ---
@@ -742,17 +450,7 @@ export default function App() {
   if (currentView === 'landing') {
     return (
       <LandingPage
-        user={user}
-        token={token}
         onLaunchStudio={navigateToCompiler}
-        onLoginSuccess={(authData) => {
-          localStorage.setItem('codelens_token', authData.token)
-          setToken(authData.token)
-          setUser(authData.user)
-          loadUserFiles(authData.token)
-        }}
-        onLogout={handleLogout}
-        API_URL={API_URL}
       />
     )
   }
@@ -922,51 +620,6 @@ export default function App() {
             <span>Analyze</span>
           </button>
 
-          {/* Clean VS Code style Sign In / Account button (No bulky box) */}
-          {user ? (
-            <div className="flex items-center gap-2 pl-2 border-l border-zinc-700/40">
-              {user.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.username || 'User'}
-                  className="w-6 h-6 rounded-full object-cover border border-zinc-600 shadow"
-                />
-              ) : (
-                <div
-                  className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center uppercase shadow"
-                  title={`Logged in as ${user.username || user.phone || 'User'}`}
-                >
-                  {(user.username || user.phone || 'U').charAt(0)}
-                </div>
-              )}
-              <span className="text-[11px] text-zinc-300 font-medium hidden sm:inline max-w-[120px] truncate" title={user.username || user.phone}>
-                {user.username || user.phone}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-[11px] text-zinc-400 hover:text-rose-400 transition cursor-pointer"
-                title="Sign Out"
-              >
-                Exit
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                navigateToLanding()
-                setTimeout(() => {
-                  const el = document.getElementById('auth-section')
-                  if (el) el.scrollIntoView({ behavior: 'smooth' })
-                }, 100)
-              }}
-              className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer hover:bg-white/5 rounded border border-zinc-700/60"
-              title="Sign In with Account on Welcome Page"
-            >
-              <span>👤</span>
-              <span className="hidden sm:inline">Sign In</span>
-            </button>
-          )}
-
           {/* History Icon */}
           <button
             onClick={handleToggleHistory}
@@ -1092,7 +745,7 @@ export default function App() {
               <span>•</span>
               <span>UTF-8</span>
               <span>•</span>
-              <span>{user ? `Account: ${user.username}` : 'Local Draft'}</span>
+              <span>Local Workspace</span>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1425,18 +1078,8 @@ export default function App() {
             </div>
 
             <div className={`pt-2.5 border-t ${themeConfig.border} text-[11px] text-zinc-500 flex items-center justify-between`}>
-              <span>{user ? `Cloud synced: @${user.username}` : 'Local browser storage'}</span>
-              {!user && (
-                <button
-                  onClick={() => {
-                    setShowWorkspace(false)
-                    setShowAuthModal(true)
-                  }}
-                  className="text-blue-400 hover:underline cursor-pointer"
-                >
-                  Sign In to sync
-                </button>
-              )}
+              <span>Local browser storage</span>
+              <span className="text-zinc-400 font-mono">Zero login required</span>
             </div>
           </div>
         </div>
