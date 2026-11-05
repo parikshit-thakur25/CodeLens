@@ -1,4 +1,3 @@
-cat << 'EOF' > /Users/parikshit/Desktop/CodeLens/README.md
 <div align="center">
 
 # 🔍 CodeLens Studio
@@ -92,3 +91,36 @@ python test_suite.py
 
 # Start API server
 uvicorn app.main:app --reload
+```
+The API will be live at `http://localhost:8000` (docs at `/docs`).
+
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open `http://localhost:5173` in your browser.
+
+---
+
+## 🧪 Testing
+
+CodeLens has a verification test suite that validates execution, timeouts, and Big-O accuracy across all 4 languages:
+
+```bash
+python test_suite.py
+```
+*(All 9/9 verification tests pass)*
+
+---
+
+## 👨‍💻 Author
+
+**Parikshit Thakur**  
+B.Tech CSE (AI & Data Science) • Graphic Era (Deemed to be University)  
+- Website: [parikshit07.tech](https://parikshit07.tech)  
+- GitHub: [@parikshit-thakur25](https://github.com/parikshit-thakur25)  
+- LinkedIn: [Parikshit Thakur](https://www.linkedin.com/in/parikshit-thakur-1a098a2a3)  
+- Email: work.parikshit07@gmail.com
