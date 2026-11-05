@@ -13,6 +13,8 @@ const DEFAULT_CODE = {
   cpp: 'int example(vector<int> nums) {\n    // paste your C++ function here\n    return 0;\n}',
 }
 
+const API_URL = import.meta.env.VITE_API_URL
+
 function App() {
   const [language, setLanguage] = useState('python')
   const [code, setCode] = useState(DEFAULT_CODE.python)
@@ -38,7 +40,7 @@ function App() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/analyze', {
+      const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, language })
@@ -66,7 +68,7 @@ function App() {
 
     setHistoryLoading(true)
     try {
-      const response = await fetch('http://127.0.0.1:8000/history')
+      const response = await fetch(`${API_URL}/history`)
       const data = await response.json()
       setHistory(data)
       setShowHistory(true)
@@ -180,4 +182,4 @@ function App() {
   )
 }
 
-export default App  
+export default App
