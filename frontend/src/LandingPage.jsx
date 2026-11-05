@@ -87,12 +87,16 @@ Zero login required.`,
       {/* Top Navigation Bar */}
       <nav className="w-full border-b border-zinc-800/80 bg-[#0c0d14]/90 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-sm text-white shadow-md">
+          <div
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="flex items-center gap-3 cursor-pointer group"
+            title="CodeLens Studio Home"
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-sm text-white shadow-md group-hover:scale-105 transition-transform">
               CL
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-tight text-white">
+              <span className="font-bold text-sm tracking-tight text-white group-hover:text-blue-400 transition-colors">
                 CodeLens <span className="text-blue-400 font-mono text-xs font-semibold">STUDIO</span>
               </span>
               <span className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">

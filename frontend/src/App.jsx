@@ -209,12 +209,12 @@ export default function App() {
   }
 
   const navigateToLanding = () => {
-    if (window.location.hash.includes('compiler') || window.location.hash.includes('studio')) {
-      window.history.back()
-    } else {
-      window.history.pushState({ view: 'landing' }, '', window.location.pathname)
-      setCurrentView('landing')
+    try {
+      window.history.pushState({ view: 'landing' }, '', window.location.pathname || '/')
+    } catch {
+      window.location.hash = ''
     }
+    setCurrentView('landing')
   }
 
   // Close dropdowns on outside click
@@ -487,12 +487,16 @@ export default function App() {
 
           <button
             onClick={navigateToLanding}
-            className="flex items-center gap-2 group cursor-pointer text-left"
-            title="Return to Guide Tour & Overview"
+            className={`flex items-center gap-2 group cursor-pointer text-left px-2 py-1 rounded-md transition ${
+              isLight
+                ? 'hover:bg-slate-200/80 active:bg-slate-300'
+                : 'hover:bg-white/10 active:bg-white/15'
+            }`}
+            title="Return to Main Interface (Landing & Overview)"
           >
             <span className="font-semibold text-sm tracking-tight flex items-center gap-1.5">
-              <span className={`font-mono ${isLight ? 'text-slate-500 font-bold' : 'text-zinc-400 font-normal'}`}>λ</span>
-              <span className={isLight ? 'text-slate-900 font-extrabold' : 'text-zinc-100 font-bold'}>CodeLens</span>
+              <span className={`font-mono text-base ${isLight ? 'text-blue-600 font-bold' : 'text-blue-400 font-bold'} group-hover:scale-110 transition-transform duration-150`}>λ</span>
+              <span className={`${isLight ? 'text-slate-900 font-extrabold' : 'text-zinc-100 font-bold'} group-hover:text-blue-500 transition-colors`}>CodeLens</span>
               <span className={`${isLight ? 'text-slate-600 font-semibold' : 'text-zinc-500 font-normal'} text-xs`}>studio</span>
             </span>
             <span className={`hidden lg:inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
@@ -501,10 +505,10 @@ export default function App() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Sandbox
             </span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded transition hidden md:inline-block ${
-              isLight ? 'text-slate-700 bg-white border border-slate-300 hover:bg-slate-200 font-medium' : 'text-zinc-400 border border-zinc-700/60 hover:bg-white/5'
+            <span className={`text-[10px] px-1.5 py-0.5 rounded transition hidden md:inline-flex items-center gap-1 font-medium ${
+              isLight ? 'text-slate-700 bg-white border border-slate-300 group-hover:border-slate-400 shadow-2xs' : 'text-zinc-300 border border-zinc-700/60 group-hover:border-zinc-500'
             }`}>
-              ← Guide Tour
+              ← Main Page
             </span>
           </button>
         </div>
