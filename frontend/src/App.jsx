@@ -167,6 +167,12 @@ export default function App() {
   // Editor telemetry
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 })
   const [copied, setCopied] = useState(false)
+  const [toast, setToast] = useState('')
+
+  const showToast = (msg) => {
+    setToast(msg)
+    setTimeout(() => setToast(''), 2400)
+  }
 
   // File Workspace State (Local persistent storage)
   const [showWorkspace, setShowWorkspace] = useState(false)
@@ -262,6 +268,7 @@ export default function App() {
   const handleCopyCode = () => {
     navigator.clipboard.writeText(code)
     setCopied(true)
+    showToast('✓ Code copied to clipboard')
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -275,6 +282,7 @@ export default function App() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    showToast(`✓ Exported ${link.download}`)
   }
 
   // --- File Workspace Handlers (100% Local Browser Persistence) ---
@@ -300,6 +308,7 @@ export default function App() {
     } catch (_) {}
     setCurrentFileName(name)
     setSaveModalOpen(false)
+    showToast(`✓ Saved "${name}" to workspace`)
   }
 
   const handleLoadFile = (f) => {
@@ -309,14 +318,17 @@ export default function App() {
     setShowWorkspace(false)
     setAnalysisResult(null)
     setRunResult(null)
+    showToast(`📁 Loaded "${f.name}"`)
   }
 
   const handleDeleteFile = (fId) => {
+    const file = workspaceFiles.find((f) => f.id === fId)
     const filtered = workspaceFiles.filter((f) => f.id !== fId)
     setWorkspaceFiles(filtered)
     try {
       localStorage.setItem('codelens_workspace_files', JSON.stringify(filtered))
     } catch (_) {}
+    showToast(`🗑️ Deleted ${file ? file.name : 'file'}`)
   }
 
   // --- History Handlers with Delete Support ---
@@ -483,6 +495,10 @@ export default function App() {
               <span className={isLight ? 'text-slate-900 font-bold' : 'text-zinc-100 font-bold'}>CodeLens</span>
               <span className="text-zinc-500 font-normal text-xs">studio</span>
             </span>
+            <span className="hidden lg:inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-1.5 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Sandbox
+            </span>
             <span className="text-[10px] text-zinc-400 border border-zinc-700/60 px-1.5 py-0.5 rounded hover:bg-white/5 transition hidden md:inline-block">
               ← Guide Tour
             </span>
@@ -498,7 +514,7 @@ export default function App() {
                 setShowLangDropdown(!showLangDropdown)
                 setShowThemeDropdown(false)
               }}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded border ${themeConfig.border} ${isLight ? 'bg-white hover:bg-slate-50 text-slate-800' : 'bg-[#1e1e1e] hover:bg-[#2d2d2d] text-zinc-200'} transition cursor-pointer text-xs font-medium`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${themeConfig.border} ${isLight ? 'bg-white hover:bg-slate-50 text-slate-800 shadow-xs' : 'bg-[#1e1e1e] hover:bg-[#2d2d2d] text-zinc-200'} transition cursor-pointer text-xs font-medium`}
             >
               <span>{currentLangConfig.badge}</span>
               <span>{currentLangConfig.label}</span>
@@ -506,7 +522,7 @@ export default function App() {
             </button>
 
             {showLangDropdown && (
-              <div className={`absolute top-full mt-1 left-0 w-44 rounded-md shadow-xl border ${themeConfig.border} ${isLight ? 'bg-white' : 'bg-[#252526]'} py-1 z-50 animate-fade-in`}>
+              <div className={`absolute top-full mt-1 left-0 w-48 rounded-md shadow-2xl border ${themeConfig.border} ${isLight ? 'bg-white' : 'bg-[#252526]'} py-1 z-50 animate-fade-in`}>
                 <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 border-b border-inherit">
                   Select Language
                 </div>
@@ -540,7 +556,7 @@ export default function App() {
                 setShowThemeDropdown(!showThemeDropdown)
                 setShowLangDropdown(false)
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border ${themeConfig.border} ${isLight ? 'bg-white hover:bg-slate-50 text-slate-700' : 'bg-[#1e1e1e] hover:bg-[#2d2d2d] text-zinc-300'} transition cursor-pointer text-xs`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border ${themeConfig.border} ${isLight ? 'bg-white hover:bg-slate-50 text-slate-700 shadow-xs' : 'bg-[#1e1e1e] hover:bg-[#2d2d2d] text-zinc-300'} transition cursor-pointer text-xs`}
               title="Change Editor Theme & Background"
             >
               <span>🎨</span>
@@ -549,7 +565,7 @@ export default function App() {
             </button>
 
             {showThemeDropdown && (
-              <div className={`absolute top-full mt-1 right-0 w-40 rounded-md shadow-xl border ${themeConfig.border} ${isLight ? 'bg-white' : 'bg-[#252526]'} py-1 z-50 animate-fade-in`}>
+              <div className={`absolute top-full mt-1 right-0 w-44 rounded-md shadow-2xl border ${themeConfig.border} ${isLight ? 'bg-white' : 'bg-[#252526]'} py-1 z-50 animate-fade-in`}>
                 <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 border-b border-inherit">
                   Editor Theme
                 </div>
@@ -575,57 +591,52 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right: Restrained, Professional Action Buttons & Sign In */}
+        {/* Right: Action Buttons */}
         <div className="flex items-center gap-2">
-          {/* Professional Run Button (No loud clown colors) */}
+          {/* Polished Fast Run Button */}
           <button
             onClick={handleRun}
             disabled={running || analyzing}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border font-medium text-xs transition cursor-pointer ${
-              isLight
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'
-                : 'bg-[#2d2d2d] hover:bg-[#383838] text-emerald-400 border-[#3c3c3c] hover:border-emerald-500/40'
-            } disabled:opacity-40`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-xs transition cursor-pointer active:scale-95 shadow-sm bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Execute Code (⌘+Enter)"
           >
             {running ? (
-              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+              <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <span className="text-[11px]">▶</span>
+              <span className="text-xs">▶</span>
             )}
             <span>Run</span>
-            <kbd className="hidden md:inline-block px-1 text-[9px] font-mono opacity-60">⌘↵</kbd>
+            <kbd className="hidden md:inline-block px-1 py-0.2 text-[9px] font-mono bg-black/25 rounded opacity-80">⌘↵</kbd>
           </button>
 
-          {/* Professional Analyze Button */}
+          {/* Polished Analyze Button */}
           <button
             onClick={handleAnalyze}
             disabled={running || analyzing}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded border font-medium text-xs transition cursor-pointer ${
-              isLight
-                ? 'bg-slate-800 hover:bg-slate-900 text-white border-slate-900'
-                : 'bg-[#2d2d2d] hover:bg-[#383838] text-zinc-100 border-[#3c3c3c] hover:border-zinc-500'
-            } disabled:opacity-40`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-xs transition cursor-pointer active:scale-95 shadow-sm bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Algorithmic AST Analysis (⇧+⌘+Enter)"
           >
             {analyzing ? (
-              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+              <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <span className="text-amber-400 text-xs">⚡</span>
+              <span className="text-xs">⚡</span>
             )}
             <span>Analyze</span>
+            <kbd className="hidden md:inline-block px-1 py-0.2 text-[9px] font-mono bg-black/25 rounded opacity-80">⇧⌘↵</kbd>
           </button>
 
           {/* History Icon */}
           <button
             onClick={handleToggleHistory}
             disabled={historyLoading}
-            className={`p-1.5 rounded border ${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 text-zinc-400 hover:text-zinc-200 transition cursor-pointer text-xs`}
-            title="Analysis History"
+            className={`p-1.5 rounded-md border ${themeConfig.border} hover:bg-black/10 dark:hover:bg-white/5 text-zinc-400 hover:text-zinc-200 transition cursor-pointer text-xs`}
+            title="Past Analysis Records"
           >
             📜
           </button>
@@ -814,16 +825,38 @@ export default function App() {
             {activeTab === 'console' && (
               <div className="flex flex-col h-full font-mono text-xs">
                 <div className={`flex items-center justify-between text-zinc-400 mb-2 pb-1.5 border-b ${themeConfig.border}`}>
-                  <span className="text-[11px] text-zinc-500 font-mono">Terminal Output</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-zinc-500 font-mono">Terminal Output</span>
+                    {runResult && (
+                      <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline">
+                        • {language.toUpperCase()} Sandbox
+                      </span>
+                    )}
+                  </div>
 
                   {runResult && (
                     <div className="flex items-center gap-2 text-[11px]">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        runResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 ${
+                        runResult.success ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                       }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                         Exit {runResult.exit_code || (runResult.success ? 0 : 1)}
                       </span>
-                      <span>{runResult.execution_time_ms} ms</span>
+                      <span className="text-zinc-400 font-mono text-[10px] bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-700/40">
+                        ⚡ {runResult.execution_time_ms} ms
+                      </span>
+                      <button
+                        onClick={() => {
+                          const out = (runResult.stdout || '') + (runResult.stderr ? '\n' + runResult.stderr : '')
+                          navigator.clipboard.writeText(out.trim())
+                          showToast('✓ Terminal output copied')
+                        }}
+                        className="text-[10px] text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 rounded border border-zinc-700/60 hover:bg-white/5 transition flex items-center gap-1 cursor-pointer font-mono"
+                        title="Copy console output"
+                      >
+                        <span>📋</span>
+                        <span>Copy</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -831,8 +864,8 @@ export default function App() {
                 <div className={`flex-1 ${isLight ? 'bg-slate-50' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[400px] font-mono text-xs`}>
                   {running ? (
                     <div className="flex items-center justify-center h-full text-zinc-400 gap-2 py-16">
-                      <div className="w-4 h-4 rounded-full border-2 border-zinc-600 border-t-zinc-200 animate-spin" />
-                      <span>Executing in sandbox...</span>
+                      <div className="w-4 h-4 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+                      <span>Executing in high-speed sandbox...</span>
                     </div>
                   ) : runResult ? (
                     <div className="space-y-1">
@@ -867,8 +900,8 @@ export default function App() {
               <div className="space-y-3">
                 {analyzing ? (
                   <div className="flex items-center justify-center min-h-[380px] text-zinc-400 gap-2">
-                    <div className="w-4 h-4 rounded-full border-2 border-zinc-600 border-t-zinc-200 animate-spin" />
-                    <span>Analyzing code structure...</span>
+                    <div className="w-4 h-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                    <span>Analyzing code structure & loops...</span>
                   </div>
                 ) : analysisResult ? (
                   <>
@@ -887,7 +920,7 @@ export default function App() {
                               key={item.label}
                               className={`p-1.5 rounded text-center border transition ${
                                 isActive
-                                  ? 'bg-blue-600/20 border-blue-500 text-white font-semibold'
+                                  ? 'bg-gradient-to-b from-blue-600/30 to-indigo-600/20 border-blue-500 text-white font-bold ring-1 ring-blue-500/70 shadow-sm shadow-blue-500/20'
                                   : 'border-transparent text-zinc-500 opacity-60'
                               }`}
                             >
@@ -918,6 +951,30 @@ export default function App() {
                         </p>
                       </div>
                     </div>
+
+                    {/* Algorithmic Efficiency Assessment */}
+                    {activeSpectrumIdx >= 0 && (
+                      <div>
+                        {activeSpectrumIdx <= 1 && (
+                          <div className="p-2.5 rounded border border-emerald-800/40 bg-emerald-950/20 text-emerald-300 text-xs flex items-center gap-2">
+                            <span>⚡</span>
+                            <span><strong>Optimal Efficiency:</strong> Sub-linear scaling. Handles large-scale datasets with minimal latency.</span>
+                          </div>
+                        )}
+                        {activeSpectrumIdx >= 2 && activeSpectrumIdx <= 3 && (
+                          <div className="p-2.5 rounded border border-blue-800/40 bg-blue-950/20 text-blue-300 text-xs flex items-center gap-2">
+                            <span>🔷</span>
+                            <span><strong>Scalable Efficiency:</strong> Linear or linearithmic runtime. Standard production efficiency.</span>
+                          </div>
+                        )}
+                        {activeSpectrumIdx >= 4 && (
+                          <div className="p-2.5 rounded border border-amber-800/40 bg-amber-950/20 text-amber-300 text-xs flex items-center gap-2">
+                            <span>⚠️</span>
+                            <span><strong>Performance Bottleneck:</strong> Nested loops or recursion detected. Consider hash maps or two-pointer techniques.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Reasoning Breakdown */}
                     {analysisResult.explanation && (
@@ -1199,6 +1256,14 @@ export default function App() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 bg-[#161b22] text-zinc-100 border border-zinc-700/80 px-4 py-2 rounded-lg shadow-2xl text-xs flex items-center gap-2 backdrop-blur-md animate-fade-in font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>{toast}</span>
         </div>
       )}
     </div>
