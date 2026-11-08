@@ -455,6 +455,212 @@ def execute_wandbox(code: str, language: str, stdin: str = "") -> Dict[str, Any]
         }
 
 
+def make_unbuffered_c_cpp(code: str) -> str:
+    """Inject unbuffered stdout into main() so printf/cout flushes immediately."""
+    if "setbuf" in code or "setvbuf" in code:
+        return code
+    pattern = r"(int\s+main\s*\([^)]*\)\s*\{)"
+    if re.search(pattern, code):
+        code = re.sub(pattern, r"\1 setbuf(stdout, NULL);", code, count=1)
+    return code
+
+
+async def execute_interactive_ws(websocket, code: str, language: str):
+    import asyncio
+    import signal
+
+    lang = language.lower()
+    if lang in ("c++", "cpp"):
+        lang = "cpp"
+    start_time = time.perf_counter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cmd = []
+
+        if lang == "python":
+            script_path = os.path.join(tmpdir, "main.py")
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(code)
+            cmd = [sys.executable, "-u", script_path]
+
+        elif lang == "c":
+            c_code = make_unbuffered_c_cpp(code)
+            src_path = os.path.join(tmpdir, "main.c")
+            bin_path = os.path.join(tmpdir, "run_bin")
+            with open(src_path, "w", encoding="utf-8") as f:
+                f.write(c_code)
+            gcc = shutil.which("gcc") or "gcc"
+            comp = subprocess.run([gcc, "-O2", src_path, "-o", bin_path, "-lm"], capture_output=True, text=True)
+            if comp.returncode != 0:
+                await websocket.send_json({"type": "stderr", "data": comp.stderr})
+                await websocket.send_json({"type": "exit", "code": comp.returncode, "execution_time_ms": 0})
+                return
+            cmd = [bin_path]
+
+        elif lang == "cpp":
+            cpp_code = make_unbuffered_c_cpp(code)
+            src_path = os.path.join(tmpdir, "main.cpp")
+            bin_path = os.path.join(tmpdir, "run_bin")
+            with open(src_path, "w", encoding="utf-8") as f:
+                f.write(cpp_code)
+            gpp = shutil.which("g++") or "g++"
+            comp = subprocess.run([gpp, "-O2", "-std=c++20", src_path, "-o", bin_path], capture_output=True, text=True)
+            if comp.returncode != 0:
+                await websocket.send_json({"type": "stderr", "data": comp.stderr})
+                await websocket.send_json({"type": "exit", "code": comp.returncode, "execution_time_ms": 0})
+                return
+            cmd = [bin_path]
+
+        elif lang == "java":
+            m = re.search(r"class\s+([A-Za-z0-9_]+)", code)
+            classname = m.group(1) if m else "Main"
+            src_path = os.path.join(tmpdir, f"{classname}.java")
+            with open(src_path, "w", encoding="utf-8") as f:
+                f.write(code)
+            javac = shutil.which("javac") or "javac"
+            java_bin = shutil.which("java") or "java"
+            comp = subprocess.run([javac, src_path], capture_output=True, text=True)
+            if comp.returncode != 0:
+                await websocket.send_json({"type": "stderr", "data": comp.stderr})
+                await websocket.send_json({"type": "exit", "code": comp.returncode, "execution_time_ms": 0})
+                return
+            cmd = [java_bin, "-cp", tmpdir, classname]
+
+        else:
+            await websocket.send_json({"type": "stderr", "data": f"Unsupported language: {language}"})
+            await websocket.send_json({"type": "exit", "code": 1, "execution_time_ms": 0})
+            return
+
+        # Check for PTY availability (Unix/Linux/macOS)
+        try:
+            import pty
+            import termios
+            import select
+
+            master, slave = pty.openpty()
+            # Disable local echo in PTY so typed input is echoed cleanly by client
+            try:
+                attrs = termios.tcgetattr(slave)
+                attrs[3] = attrs[3] & ~termios.ECHO
+                termios.tcsetattr(slave, termios.TCSANOW, attrs)
+            except Exception:
+                pass
+
+            proc = subprocess.Popen(
+                cmd,
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                close_fds=True,
+                cwd=tmpdir,
+                preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+            )
+            os.close(slave)
+
+            loop = asyncio.get_event_loop()
+            stop_event = asyncio.Event()
+
+            async def stream_output():
+                try:
+                    while not stop_event.is_set():
+                        def do_read():
+                            r, _, _ = select.select([master], [], [], 0.05)
+                            if r:
+                                try:
+                                    return os.read(master, 2048)
+                                except OSError:
+                                    return b""
+                            return None
+
+                        chunk = await loop.run_in_executor(None, do_read)
+                        if chunk is not None:
+                            if chunk:
+                                text_data = chunk.decode("utf-8", errors="replace")
+                                await websocket.send_json({"type": "stdout", "data": text_data})
+                            else:
+                                break
+
+                        if proc.poll() is not None:
+                            # Flush remaining bytes
+                            while True:
+                                r, _, _ = select.select([master], [], [], 0.02)
+                                if not r:
+                                    break
+                                try:
+                                    extra = os.read(master, 2048)
+                                    if not extra:
+                                        break
+                                    await websocket.send_json({"type": "stdout", "data": extra.decode("utf-8", errors="replace")})
+                                except OSError:
+                                    break
+                            break
+                except Exception:
+                    pass
+                finally:
+                    stop_event.set()
+
+            output_task = asyncio.create_task(stream_output())
+
+            async def handle_input():
+                try:
+                    while not stop_event.is_set() and proc.poll() is None:
+                        try:
+                            msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.1)
+                            mtype = msg.get("type")
+                            if mtype == "stdin":
+                                inp = msg.get("data", "")
+                                if inp:
+                                    os.write(master, inp.encode("utf-8"))
+                            elif mtype == "kill":
+                                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                                    try: os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                                    except Exception: pass
+                                proc.terminate()
+                                break
+                        except asyncio.TimeoutError:
+                            continue
+                except Exception:
+                    pass
+
+            input_task = asyncio.create_task(handle_input())
+
+            try:
+                await asyncio.wait_for(output_task, timeout=60.0)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "stderr", "data": "\n[Execution Timed Out (60s limit)]\n"})
+                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                    try: os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except Exception: pass
+                proc.kill()
+            finally:
+                stop_event.set()
+                input_task.cancel()
+                try: proc.wait(timeout=1)
+                except Exception: proc.kill()
+                try: os.close(master)
+                except Exception: pass
+
+        except ImportError:
+            # Fallback for systems without PTY
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=0,
+                cwd=tmpdir,
+            )
+            out, err = proc.communicate(timeout=10)
+            if out:
+                await websocket.send_json({"type": "stdout", "data": out})
+            if err:
+                await websocket.send_json({"type": "stderr", "data": err})
+
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+        await websocket.send_json({"type": "exit", "code": proc.returncode or 0, "execution_time_ms": elapsed_ms})
+
+
 def execute_code(code: str, language: str, stdin: str = "") -> Dict[str, Any]:
     """
     3-Tier Execution Pipeline:

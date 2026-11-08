@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ from app.sms import dispatch_sms_otp
 
 from app.analyzer import analyze_python_detailed
 from app.analyzer_multilang import analyze_code_multilang_detailed
-from app.runner import execute_code
+from app.runner import execute_code, execute_interactive_ws
 from app.database import engine, SessionLocal, Base
 from app.models import Analysis, User, UserFile
 from app.auth import hash_password, verify_password, create_token, decode_token
@@ -546,6 +546,40 @@ def run_code_endpoint(submission: RunSubmission):
         stdin=submission.stdin,
     )
     return result
+
+
+@app.websocket("/ws/terminal")
+async def websocket_terminal_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        init_msg = await websocket.receive_json()
+        if init_msg.get("type") != "start":
+            await websocket.send_json({"type": "stderr", "data": "Invalid start message\n"})
+            await websocket.close()
+            return
+
+        code = init_msg.get("code", "")
+        language = init_msg.get("language", "python")
+        if not code.strip():
+            await websocket.send_json({"type": "stderr", "data": "Code cannot be empty\n"})
+            await websocket.send_json({"type": "exit", "code": 1, "execution_time_ms": 0})
+            await websocket.close()
+            return
+
+        await execute_interactive_ws(websocket, code, language)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        try:
+            await websocket.send_json({"type": "stderr", "data": f"Terminal Error: {str(e)}\n"})
+            await websocket.send_json({"type": "exit", "code": 1, "execution_time_ms": 0})
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.get("/history")

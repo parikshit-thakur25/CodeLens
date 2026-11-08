@@ -147,17 +147,17 @@ export default function App() {
   const [language, setLanguage] = useState('python')
   const [code, setCode] = useState(DEFAULT_CODE.python)
   const [currentFileName, setCurrentFileName] = useState('main.py')
-  const [stdin, setStdin] = useState('')
-  const [showStdin, setShowStdin] = useState(false)
+  const [terminalLogs, setTerminalLogs] = useState('')
+  const [terminalInputVal, setTerminalInputVal] = useState('')
+  const [isTerminalRunning, setIsTerminalRunning] = useState(false)
+  const wsRef = useRef(null)
+  const terminalBottomRef = useRef(null)
+  const terminalInputRef = useRef(null)
 
-  // Detect if current code attempts to read input
-  const hasInputUsage = useMemo(() => {
-    if (!code) return false
-    if (language === 'python') return /input\s*\(|sys\.stdin/m.test(code)
-    if (language === 'c' || language === 'cpp') return /scanf\s*\(|cin\s*>>|getchar\s*\(|getline\s*\(/m.test(code)
-    if (language === 'java') return /Scanner|BufferedReader|System\.in/m.test(code)
-    return false
-  }, [code, language])
+  // Auto-scroll terminal to bottom when new logs or prompts arrive
+  useEffect(() => {
+    terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [terminalLogs, isTerminalRunning])
 
   // Dropdown States
   const [showLangDropdown, setShowLangDropdown] = useState(false)
@@ -377,29 +377,125 @@ export default function App() {
   }
 
   // --- Execution & Analysis ---
-  const handleRun = async () => {
+  const handleRun = () => {
     setError('')
-    setRunning(true)
     setActiveTab('console')
+    setRunning(true)
+    setIsTerminalRunning(true)
+    setTerminalInputVal('')
 
+    // Close any previous websocket
+    if (wsRef.current) {
+      try {
+        wsRef.current.close()
+      } catch (_) {}
+    }
+
+    const startBanner = `parikshit@codelens:~$ run ${currentFileName}\n`
+    setTerminalLogs(startBanner)
+
+    const rawWsUrl = API_URL.replace(/^http/, 'ws')
+    let ws = null
+    try {
+      ws = new WebSocket(`${rawWsUrl}/ws/terminal`)
+      wsRef.current = ws
+    } catch (_) {
+      executeHttpFallback()
+      return
+    }
+
+    let isConnected = false
+    const fallbackTimer = setTimeout(() => {
+      if (!isConnected) {
+        try { ws.close() } catch (_) {}
+        executeHttpFallback()
+      }
+    }, 4000)
+
+    ws.onopen = () => {
+      isConnected = true
+      clearTimeout(fallbackTimer)
+      ws.send(JSON.stringify({ type: 'start', code, language }))
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'stdout' || msg.type === 'stderr') {
+          setTerminalLogs((prev) => prev + msg.data)
+        } else if (msg.type === 'exit') {
+          setIsTerminalRunning(false)
+          setRunning(false)
+          setTerminalLogs((prev) => prev + `\n[Process completed in ${msg.execution_time_ms}ms with exit code ${msg.code}]\n`)
+          setRunResult({
+            success: msg.code === 0,
+            exit_code: String(msg.code),
+            execution_time_ms: msg.execution_time_ms,
+          })
+          try { ws.close() } catch (_) {}
+        }
+      } catch (_) {
+        setTerminalLogs((prev) => prev + event.data)
+      }
+    }
+
+    ws.onerror = () => {
+      clearTimeout(fallbackTimer)
+      if (!isConnected) {
+        executeHttpFallback()
+      }
+    }
+
+    ws.onclose = () => {
+      clearTimeout(fallbackTimer)
+      setIsTerminalRunning(false)
+      setRunning(false)
+    }
+  }
+
+  const executeHttpFallback = async () => {
+    setRunning(true)
+    setIsTerminalRunning(false)
     try {
       const response = await fetch(`${API_URL}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language, stdin }),
+        body: JSON.stringify({ code, language, stdin: '' }),
       })
-
       const data = await response.json()
       if (!response.ok) {
-        setError(data.detail || 'Execution failed')
+        setTerminalLogs((prev) => prev + `\n${data.detail || 'Execution failed'}\n`)
       } else {
+        let out = data.stdout || ''
+        if (data.stderr) out += (out ? '\n' : '') + data.stderr
+        setTerminalLogs((prev) => prev + out + `\n[Process finished in ${data.execution_time_ms}ms (exit ${data.exit_code})]\n`)
         setRunResult(data)
       }
     } catch (_) {
-      setError('Could not reach execution backend.')
+      setTerminalLogs((prev) => prev + '\n[Could not connect to execution backend]\n')
     } finally {
       setRunning(false)
     }
+  }
+
+  const handleTerminalInputSubmit = (e) => {
+    e?.preventDefault()
+    if (!isTerminalRunning || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return
+    }
+    const val = terminalInputVal
+    setTerminalLogs((prev) => prev + val + '\n')
+    wsRef.current.send(JSON.stringify({ type: 'stdin', data: val + '\n' }))
+    setTerminalInputVal('')
+  }
+
+  const handleTerminalKill = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'kill' }))
+    }
+    setTerminalLogs((prev) => prev + '^C\n[Process terminated by user]\n')
+    setIsTerminalRunning(false)
+    setRunning(false)
   }
 
   const handleAnalyze = async () => {
@@ -441,7 +537,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [code, language, stdin])
+  }, [code, language])
 
   const currentLangConfig = LANGUAGES.find((l) => l.value === language) || LANGUAGES[0]
   const themeConfig = THEMES.find((t) => t.value === currentTheme) || THEMES[0]
@@ -697,23 +793,6 @@ export default function App() {
 
             <div className="flex items-center gap-1.5">
               <button
-                onClick={() => setShowStdin(!showStdin)}
-                className={`px-2.5 py-0.5 rounded text-[11px] font-mono transition flex items-center gap-1.5 border cursor-pointer ${
-                  showStdin || stdin.length > 0
-                    ? isLight ? 'bg-blue-100 text-blue-800 border-blue-400 font-bold' : 'bg-blue-600/20 text-blue-400 border-blue-500/40 font-semibold'
-                    : isLight ? 'border-transparent text-slate-700 hover:text-slate-950 hover:bg-slate-200' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
-                }`}
-                title="Toggle standard input drawer"
-              >
-                <span>📥 Input</span>
-                {stdin.length > 0 ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                ) : hasInputUsage ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                ) : null}
-              </button>
-
-              <button
                 onClick={handleCopyCode}
                 className={`px-2 py-0.5 rounded border border-transparent transition text-[11px] font-medium ${
                   isLight ? 'text-slate-700 hover:text-slate-950 hover:bg-slate-200 hover:border-slate-300' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 hover:border-zinc-700'
@@ -734,25 +813,6 @@ export default function App() {
               </button>
             </div>
           </div>
-
-          {/* Optional Stdin Drawer */}
-          {showStdin && (
-            <div className={`p-2.5 border-b ${themeConfig.border} ${themeConfig.bg}`}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-semibold">
-                  Standard Input (stdin stream)
-                </span>
-                <span className="text-[10px] text-zinc-500 font-mono">{stdin.length} bytes</span>
-              </div>
-              <textarea
-                value={stdin}
-                onChange={(e) => setStdin(e.target.value)}
-                placeholder="Pass standard input parameters here (e.g. for input() or scanf)..."
-                rows={2}
-                className={`w-full ${themeConfig.surface} border ${themeConfig.border} rounded p-2 font-mono text-xs focus:outline-none focus:border-blue-500 resize-y`}
-              />
-            </div>
-          )}
 
           {/* Monaco Editor Container */}
           <div className="flex-1 min-h-[480px] lg:min-h-[580px]">
@@ -810,25 +870,11 @@ export default function App() {
                     : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <span>Terminal Output</span>
-                {runResult && (
+                <span>Terminal</span>
+                {isTerminalRunning ? (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                ) : runResult ? (
                   <span className={`inline-block w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                )}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('input')}
-                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'input'
-                    ? `${themeConfig.bg} ${isLight ? 'text-slate-900 font-bold border-slate-300' : 'text-zinc-100 font-semibold'} shadow-xs border ${themeConfig.border}`
-                    : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <span>Custom Input</span>
-                {stdin.length > 0 ? (
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                ) : hasInputUsage ? (
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 ) : null}
               </button>
 
@@ -872,199 +918,116 @@ export default function App() {
             {/* Terminal Tab */}
             {activeTab === 'console' && (
               <div className="flex flex-col h-full font-mono text-xs">
-                {/* Embedded Program Input Drawer */}
-                <div className={`mb-3 rounded-lg border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'} p-2.5 transition`}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-mono font-semibold flex items-center gap-1.5 ${isLight ? 'text-slate-800' : 'text-zinc-300'}`}>
-                        <span>📥</span>
-                        <span>Program Input (stdin)</span>
-                      </span>
-                      {hasInputUsage && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-sans font-medium">
-                          input() detected in code
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] font-mono">
-                      <span className={isLight ? 'text-slate-500' : 'text-zinc-500'}>
-                        {stdin ? `${stdin.split('\n').filter(Boolean).length} line(s)` : 'Empty'}
-                      </span>
-                      {stdin && (
-                        <button
-                          onClick={() => setStdin('')}
-                          className="text-zinc-400 hover:text-rose-400 transition cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <textarea
-                    value={stdin}
-                    onChange={(e) => setStdin(e.target.value)}
-                    placeholder={
-                      language === 'python'
-                        ? "Enter input values here before clicking Run (e.g. 5 or your name)..."
-                        : language === 'cpp' || language === 'c'
-                        ? "Enter input values for cin / scanf here (e.g. 10 20)..."
-                        : "Enter input values for Scanner / System.in here..."
-                    }
-                    rows={2}
-                    className={`w-full ${themeConfig.surface} border ${themeConfig.border} rounded p-2 font-mono text-xs focus:outline-none focus:border-blue-500 resize-y`}
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1 flex items-center gap-1 font-sans">
-                    <span>💡</span>
-                    <span>Values here are passed to <code>input()</code>, <code>cin</code>, or <code>scanf</code> when you hit <strong>Run</strong>.</span>
-                  </p>
-                </div>
-
+                {/* Terminal Toolbar */}
                 <div className={`flex items-center justify-between ${isLight ? 'text-slate-700' : 'text-zinc-400'} mb-2 pb-1.5 border-b ${themeConfig.border}`}>
                   <div className="flex items-center gap-2">
-                    <span className={`text-[11px] font-mono ${isLight ? 'text-slate-800 font-bold' : 'text-zinc-500'}`}>Terminal Output</span>
-                    {runResult && (
-                      <span className={`text-[10px] font-mono hidden sm:inline ${isLight ? 'text-slate-600 font-medium' : 'text-zinc-500'}`}>
-                        • {language.toUpperCase()} Sandbox
+                    <span className={`text-[11px] font-mono font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-300'}`}>
+                      Interactive Terminal
+                    </span>
+                    {isTerminalRunning ? (
+                      <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Running ({language.toUpperCase()})
                       </span>
+                    ) : runResult ? (
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded flex items-center gap-1.5 ${
+                        runResult.success
+                          ? isLight ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-500/10 text-emerald-400'
+                          : isLight ? 'bg-rose-100 text-rose-800' : 'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        Exit {runResult.exit_code ?? 0} ({runResult.execution_time_ms} ms)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500 font-mono">• Ready</span>
                     )}
                   </div>
 
-                  {runResult && (
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 ${
-                        runResult.success
-                          ? isLight ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : isLight ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        Exit {runResult.exit_code || (runResult.success ? 0 : 1)}
-                      </span>
-                      <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border ${
-                        isLight ? 'bg-slate-200 text-slate-800 border-slate-300 font-bold' : 'bg-zinc-800/60 text-zinc-400 border-zinc-700/40'
-                      }`}>
-                        ⚡ {runResult.execution_time_ms} ms
-                      </span>
+                  <div className="flex items-center gap-2">
+                    {isTerminalRunning && (
+                      <button
+                        onClick={handleTerminalKill}
+                        className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-mono font-semibold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                        title="Stop running program (Ctrl+C)"
+                      >
+                        <span>■</span>
+                        <span>Stop</span>
+                      </button>
+                    )}
+
+                    {terminalLogs && (
                       <button
                         onClick={() => {
-                          const out = (runResult.stdout || '') + (runResult.stderr ? '\n' + runResult.stderr : '')
-                          navigator.clipboard.writeText(out.trim())
-                          showToast('✓ Terminal output copied')
+                          navigator.clipboard.writeText(terminalLogs)
+                          showToast('✓ Terminal logs copied')
                         }}
-                        className={`text-[10px] px-1.5 py-0.5 rounded border transition flex items-center gap-1 cursor-pointer font-mono ${
-                          isLight ? 'text-slate-700 bg-white border-slate-300 hover:bg-slate-100 hover:text-slate-900' : 'text-zinc-400 border-zinc-700/60 hover:bg-white/5 hover:text-zinc-200'
+                        className={`text-[10px] px-2 py-0.5 rounded border transition flex items-center gap-1 cursor-pointer font-mono ${
+                          isLight ? 'text-slate-700 bg-white border-slate-300 hover:bg-slate-100' : 'text-zinc-400 border-zinc-700/60 hover:bg-white/5 hover:text-zinc-200'
                         }`}
-                        title="Copy console output"
+                        title="Copy terminal output"
                       >
                         <span>📋</span>
                         <span>Copy</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setTerminalLogs('')
+                        setRunResult(null)
+                      }}
+                      className={`text-[10px] px-2 py-0.5 rounded border transition flex items-center gap-1 cursor-pointer font-mono ${
+                        isLight ? 'text-slate-700 bg-white border-slate-300 hover:bg-slate-100' : 'text-zinc-400 border-zinc-700/60 hover:bg-white/5 hover:text-zinc-200'
+                      }`}
+                      title="Clear terminal"
+                    >
+                      <span>Clear</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className={`flex-1 ${isLight ? 'bg-white' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[320px] font-mono text-xs`}>
-                  {running ? (
-                    <div className="flex items-center justify-center h-full text-zinc-400 gap-2 py-16">
-                      <div className="w-4 h-4 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-                      <span className={isLight ? 'text-slate-700 font-medium' : 'text-zinc-400'}>Executing in high-speed sandbox...</span>
-                    </div>
-                  ) : runResult ? (
-                    <div className="space-y-1">
-                      {/* Helpful Input Required Alert */}
-                      {runResult.stderr && (runResult.stderr.includes('EOFError') || runResult.stderr.includes('NoSuchElementException')) && (
-                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5 mb-2 font-sans">
-                          <span className="text-base">⚠️</span>
-                          <div className="space-y-1">
-                            <p className="font-bold">Input Required</p>
-                            <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                              Your code requested user input with <code>input()</code>, but the <strong>Program Input (stdin)</strong> box above was empty.
-                            </p>
-                            <p className="text-[11px] text-amber-300 font-semibold">
-                              👉 Enter your input values in the box above and click <strong>Run</strong> again!
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {runResult.stdout && (
-                        <pre className={`${isLight ? 'text-emerald-700 font-semibold' : 'text-emerald-400'} whitespace-pre-wrap leading-relaxed`}>
-                          {runResult.stdout}
-                        </pre>
-                      )}
-                      {runResult.stderr && (
-                        <pre className={`${isLight ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-rose-400 bg-rose-950/20 border-rose-900/40'} whitespace-pre-wrap leading-relaxed mt-2 p-2 rounded border`}>
-                          {runResult.stderr}
-                        </pre>
-                      )}
-                      {!runResult.stdout && !runResult.stderr && (
-                        <p className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} italic`}>Program finished with no output.</p>
+                {/* Main Unified Terminal Viewport */}
+                <div
+                  className={`flex-1 ${isLight ? 'bg-slate-950 text-slate-100' : 'bg-[#0f1013] text-zinc-100'} rounded-lg p-3 border ${themeConfig.border} overflow-y-auto min-h-[420px] max-h-[640px] font-mono text-xs cursor-text flex flex-col shadow-inner`}
+                  onClick={() => terminalInputRef.current?.focus()}
+                >
+                  {terminalLogs ? (
+                    <div className="flex-1 font-mono text-xs leading-relaxed">
+                      <pre className="whitespace-pre-wrap font-mono inline text-emerald-400/90 selection:bg-emerald-800/40 selection:text-white">
+                        {terminalLogs}
+                      </pre>
+                      {isTerminalRunning && (
+                        <form
+                          onSubmit={handleTerminalInputSubmit}
+                          className="inline-flex items-center align-baseline ml-0.5"
+                        >
+                          <input
+                            ref={terminalInputRef}
+                            type="text"
+                            value={terminalInputVal}
+                            onChange={(e) => setTerminalInputVal(e.target.value)}
+                            autoFocus
+                            className="bg-transparent border-b border-emerald-400 outline-none font-mono text-xs text-white min-w-[70px] max-w-full px-1 py-0 caret-emerald-400 placeholder-zinc-600 focus:border-emerald-300"
+                            placeholder="type & ↵"
+                          />
+                        </form>
                       )}
                     </div>
                   ) : (
-                    <div className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} flex flex-col items-center justify-center h-full py-16 gap-1 text-center`}>
-                      <p className="font-mono text-xs font-semibold">Terminal ready</p>
-                      <p className="text-[11px]">
-                        Press Run or ⌘+Enter to execute code.
+                    <div className="flex flex-col items-center justify-center flex-1 py-16 gap-2 text-center select-none text-zinc-500">
+                      <div className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-emerald-400 font-mono text-sm shadow-inner">
+                        ❯_
+                      </div>
+                      <p className="font-mono text-xs font-semibold text-zinc-300">CodeLens Interactive Terminal</p>
+                      <p className="text-[11px] text-zinc-500 max-w-xs leading-relaxed">
+                        Interactive standard I/O sandbox. Type prompts directly here just like in VS Code.
+                      </p>
+                      <p className="text-[10px] text-zinc-600 font-mono">
+                        Press <span className="text-zinc-400 font-bold">Run</span> or <span className="text-zinc-400 font-bold">⌘↵</span> to execute.
                       </p>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* Custom Input Dedicated Tab */}
-            {activeTab === 'input' && (
-              <div className="flex flex-col h-full font-mono text-xs space-y-3">
-                <div className={`flex items-center justify-between ${isLight ? 'text-slate-700' : 'text-zinc-400'} pb-1.5 border-b ${themeConfig.border}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[11px] font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>📥 Custom Standard Input (stdin)</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">({stdin.length} bytes)</span>
-                  </div>
-                  {stdin && (
-                    <button
-                      onClick={() => setStdin('')}
-                      className="text-[11px] text-zinc-400 hover:text-rose-400 transition cursor-pointer"
-                    >
-                      Clear Input
-                    </button>
-                  )}
-                </div>
-
-                <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
-                  Provide custom test inputs below. When your code uses <code className="text-emerald-400">input()</code> in Python, <code className="text-blue-400">cin &gt;&gt;</code> in C++, or <code className="text-orange-400">Scanner</code> in Java, it will read values from this stream line by line.
-                </p>
-
-                <textarea
-                  value={stdin}
-                  onChange={(e) => setStdin(e.target.value)}
-                  placeholder={"Type or paste your test dataset here...\n\nExample for multiple inputs:\n5\n10 20 30 40 50"}
-                  rows={8}
-                  className={`w-full ${themeConfig.surface} border ${themeConfig.border} rounded p-3 font-mono text-xs focus:outline-none focus:border-blue-500 resize-none min-h-[180px]`}
-                />
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 font-sans">
-                  <div className="flex items-center gap-2 font-mono">
-                    <button
-                      onClick={() => setStdin("10\n20")}
-                      className={`px-2.5 py-1 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-100 text-slate-800 hover:bg-slate-200' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'} text-[10px] cursor-pointer transition`}
-                    >
-                      Sample: Two Numbers
-                    </button>
-                    <button
-                      onClick={() => setStdin("5\n1 2 3 4 5")}
-                      className={`px-2.5 py-1 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-100 text-slate-800 hover:bg-slate-200' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'} text-[10px] cursor-pointer transition`}
-                    >
-                      Sample: Array Input
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleRun}
-                    disabled={running}
-                    className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm transition"
-                  >
-                    <span>▶</span>
-                    <span>Run with this Input</span>
-                  </button>
+                  <div ref={terminalBottomRef} />
                 </div>
               </div>
             )}
