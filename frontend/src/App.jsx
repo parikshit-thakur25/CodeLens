@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Editor from '@monaco-editor/react'
 import LandingPage from './LandingPage'
 
@@ -149,6 +149,15 @@ export default function App() {
   const [currentFileName, setCurrentFileName] = useState('main.py')
   const [stdin, setStdin] = useState('')
   const [showStdin, setShowStdin] = useState(false)
+
+  // Detect if current code attempts to read input
+  const hasInputUsage = useMemo(() => {
+    if (!code) return false
+    if (language === 'python') return /input\s*\(|sys\.stdin/m.test(code)
+    if (language === 'c' || language === 'cpp') return /scanf\s*\(|cin\s*>>|getchar\s*\(|getline\s*\(/m.test(code)
+    if (language === 'java') return /Scanner|BufferedReader|System\.in/m.test(code)
+    return false
+  }, [code, language])
 
   // Dropdown States
   const [showLangDropdown, setShowLangDropdown] = useState(false)
@@ -689,14 +698,19 @@ export default function App() {
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowStdin(!showStdin)}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono transition flex items-center gap-1 border ${
-                  showStdin
-                    ? isLight ? 'bg-blue-100 text-blue-800 border-blue-400 font-bold' : 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                className={`px-2.5 py-0.5 rounded text-[11px] font-mono transition flex items-center gap-1.5 border cursor-pointer ${
+                  showStdin || stdin.length > 0
+                    ? isLight ? 'bg-blue-100 text-blue-800 border-blue-400 font-bold' : 'bg-blue-600/20 text-blue-400 border-blue-500/40 font-semibold'
                     : isLight ? 'border-transparent text-slate-700 hover:text-slate-950 hover:bg-slate-200' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
                 }`}
+                title="Toggle standard input drawer"
               >
-                <span>STDIN</span>
-                {stdin.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                <span>📥 Input</span>
+                {stdin.length > 0 ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                ) : hasInputUsage ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                ) : null}
               </button>
 
               <button
@@ -790,7 +804,7 @@ export default function App() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setActiveTab('console')}
-                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
+                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'console'
                     ? `${themeConfig.bg} ${isLight ? 'text-slate-900 font-bold border-slate-300' : 'text-zinc-100 font-semibold'} shadow-xs border ${themeConfig.border}`
                     : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
@@ -798,20 +812,36 @@ export default function App() {
               >
                 <span>Terminal Output</span>
                 {runResult && (
-                  <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${runResult.success ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                 )}
               </button>
 
               <button
+                onClick={() => setActiveTab('input')}
+                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'input'
+                    ? `${themeConfig.bg} ${isLight ? 'text-slate-900 font-bold border-slate-300' : 'text-zinc-100 font-semibold'} shadow-xs border ${themeConfig.border}`
+                    : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <span>Custom Input</span>
+                {stdin.length > 0 ? (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                ) : hasInputUsage ? (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                ) : null}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('diagnostics')}
-                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
+                className={`px-3 py-1 rounded text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'diagnostics'
                     ? `${themeConfig.bg} ${isLight ? 'text-slate-900 font-bold border-slate-300' : 'text-zinc-100 font-semibold'} shadow-xs border ${themeConfig.border}`
                     : isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 <span>Complexity Diagnostics</span>
-                {analysisResult && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-indigo-500" />}
+                {analysisResult && <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500" />}
               </button>
             </div>
 
@@ -822,7 +852,7 @@ export default function App() {
                 setError('')
               }}
               className={`text-[11px] font-mono px-2 py-0.5 rounded transition ${
-                isLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 font-medium' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                isLight ? 'text-slate-600 hover:text-slate-950 hover:bg-slate-200 font-medium' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
               }`}
             >
               Clear
@@ -842,6 +872,53 @@ export default function App() {
             {/* Terminal Tab */}
             {activeTab === 'console' && (
               <div className="flex flex-col h-full font-mono text-xs">
+                {/* Embedded Program Input Drawer */}
+                <div className={`mb-3 rounded-lg border ${themeConfig.border} ${isLight ? 'bg-slate-50' : 'bg-[#181818]'} p-2.5 transition`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-mono font-semibold flex items-center gap-1.5 ${isLight ? 'text-slate-800' : 'text-zinc-300'}`}>
+                        <span>📥</span>
+                        <span>Program Input (stdin)</span>
+                      </span>
+                      {hasInputUsage && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-sans font-medium">
+                          input() detected in code
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-mono">
+                      <span className={isLight ? 'text-slate-500' : 'text-zinc-500'}>
+                        {stdin ? `${stdin.split('\n').filter(Boolean).length} line(s)` : 'Empty'}
+                      </span>
+                      {stdin && (
+                        <button
+                          onClick={() => setStdin('')}
+                          className="text-zinc-400 hover:text-rose-400 transition cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <textarea
+                    value={stdin}
+                    onChange={(e) => setStdin(e.target.value)}
+                    placeholder={
+                      language === 'python'
+                        ? "Enter input values here before clicking Run (e.g. 5 or your name)..."
+                        : language === 'cpp' || language === 'c'
+                        ? "Enter input values for cin / scanf here (e.g. 10 20)..."
+                        : "Enter input values for Scanner / System.in here..."
+                    }
+                    rows={2}
+                    className={`w-full ${themeConfig.surface} border ${themeConfig.border} rounded p-2 font-mono text-xs focus:outline-none focus:border-blue-500 resize-y`}
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1 flex items-center gap-1 font-sans">
+                    <span>💡</span>
+                    <span>Values here are passed to <code>input()</code>, <code>cin</code>, or <code>scanf</code> when you hit <strong>Run</strong>.</span>
+                  </p>
+                </div>
+
                 <div className={`flex items-center justify-between ${isLight ? 'text-slate-700' : 'text-zinc-400'} mb-2 pb-1.5 border-b ${themeConfig.border}`}>
                   <div className="flex items-center gap-2">
                     <span className={`text-[11px] font-mono ${isLight ? 'text-slate-800 font-bold' : 'text-zinc-500'}`}>Terminal Output</span>
@@ -885,7 +962,7 @@ export default function App() {
                   )}
                 </div>
 
-                <div className={`flex-1 ${isLight ? 'bg-white' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[400px] font-mono text-xs`}>
+                <div className={`flex-1 ${isLight ? 'bg-white' : 'bg-[#181818]'} rounded p-3 border ${themeConfig.border} overflow-auto min-h-[320px] font-mono text-xs`}>
                   {running ? (
                     <div className="flex items-center justify-center h-full text-zinc-400 gap-2 py-16">
                       <div className="w-4 h-4 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
@@ -893,6 +970,21 @@ export default function App() {
                     </div>
                   ) : runResult ? (
                     <div className="space-y-1">
+                      {/* Helpful Input Required Alert */}
+                      {runResult.stderr && (runResult.stderr.includes('EOFError') || runResult.stderr.includes('NoSuchElementException')) && (
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5 mb-2 font-sans">
+                          <span className="text-base">⚠️</span>
+                          <div className="space-y-1">
+                            <p className="font-bold">Input Required</p>
+                            <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                              Your code requested user input with <code>input()</code>, but the <strong>Program Input (stdin)</strong> box above was empty.
+                            </p>
+                            <p className="text-[11px] text-amber-300 font-semibold">
+                              👉 Enter your input values in the box above and click <strong>Run</strong> again!
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       {runResult.stdout && (
                         <pre className={`${isLight ? 'text-emerald-700 font-semibold' : 'text-emerald-400'} whitespace-pre-wrap leading-relaxed`}>
                           {runResult.stdout}
@@ -908,13 +1000,71 @@ export default function App() {
                       )}
                     </div>
                   ) : (
-                    <div className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} flex flex-col items-center justify-center h-full py-20 gap-1 text-center`}>
+                    <div className={`${isLight ? 'text-slate-500' : 'text-zinc-500'} flex flex-col items-center justify-center h-full py-16 gap-1 text-center`}>
                       <p className="font-mono text-xs font-semibold">Terminal ready</p>
                       <p className="text-[11px]">
                         Press Run or ⌘+Enter to execute code.
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Input Dedicated Tab */}
+            {activeTab === 'input' && (
+              <div className="flex flex-col h-full font-mono text-xs space-y-3">
+                <div className={`flex items-center justify-between ${isLight ? 'text-slate-700' : 'text-zinc-400'} pb-1.5 border-b ${themeConfig.border}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>📥 Custom Standard Input (stdin)</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">({stdin.length} bytes)</span>
+                  </div>
+                  {stdin && (
+                    <button
+                      onClick={() => setStdin('')}
+                      className="text-[11px] text-zinc-400 hover:text-rose-400 transition cursor-pointer"
+                    >
+                      Clear Input
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+                  Provide custom test inputs below. When your code uses <code className="text-emerald-400">input()</code> in Python, <code className="text-blue-400">cin &gt;&gt;</code> in C++, or <code className="text-orange-400">Scanner</code> in Java, it will read values from this stream line by line.
+                </p>
+
+                <textarea
+                  value={stdin}
+                  onChange={(e) => setStdin(e.target.value)}
+                  placeholder={"Type or paste your test dataset here...\n\nExample for multiple inputs:\n5\n10 20 30 40 50"}
+                  rows={8}
+                  className={`w-full ${themeConfig.surface} border ${themeConfig.border} rounded p-3 font-mono text-xs focus:outline-none focus:border-blue-500 resize-none min-h-[180px]`}
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 font-sans">
+                  <div className="flex items-center gap-2 font-mono">
+                    <button
+                      onClick={() => setStdin("10\n20")}
+                      className={`px-2.5 py-1 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-100 text-slate-800 hover:bg-slate-200' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'} text-[10px] cursor-pointer transition`}
+                    >
+                      Sample: Two Numbers
+                    </button>
+                    <button
+                      onClick={() => setStdin("5\n1 2 3 4 5")}
+                      className={`px-2.5 py-1 rounded border ${themeConfig.border} ${isLight ? 'bg-slate-100 text-slate-800 hover:bg-slate-200' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'} text-[10px] cursor-pointer transition`}
+                    >
+                      Sample: Array Input
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleRun}
+                    disabled={running}
+                    className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm transition"
+                  >
+                    <span>▶</span>
+                    <span>Run with this Input</span>
+                  </button>
                 </div>
               </div>
             )}
